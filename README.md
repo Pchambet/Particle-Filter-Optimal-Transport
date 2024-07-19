@@ -7,6 +7,7 @@ This repository contains an implementation of an Optimal Transport Particle Filt
 ## Table of Contents
 - [Project Overview](#project-overview)
 - [Features](#features)
+- [Project Structure](#project-structure)
 - [Installation](#installation)
 - [Usage](#usage)
 - [Methodology](#methodology)
@@ -22,6 +23,25 @@ The main goal is to integrate a resampling function with optimal transport in a 
 - **Auto Differentiation**: Enhances the precision of state estimation by automatically computing derivatives.
 - **Visualization**: Plots true states, classical estimates, and differentiable estimates for comparison.
 - **Proof paper**: Explain how the results and the algorithms have been created and where they come from. It contains every mathematical research of this project.
+
+## Project Structure
+```plaintext
+PARTICULAR_FILTERING
+├── Code
+│   ├── auto_differentiation.py
+│   └── optimal_transport.py
+├── Documents
+│   ├── autodifferenciation.pdf
+│   ├── Cassiopée.pdf
+│   └── Preuves.pdf
+├── Notebooks
+│   ├── Notebook Autodifférenciation.ipynb
+│   ├── Notebook Comparaison Classique et Différentiable.ipynb
+│   └── PFD-Tutoriel-TP-Pierre.ipynb
+├── Outputs
+│   ├── output1_optimal_transport.png
+│   └── output2_optimal_transport.png
+└── README.md
 
 ## Installation
 To run this project, you need to have Python 3.x installed along with the following libraries:
@@ -49,3 +69,7 @@ Auto Differentiation is utilized to automatically compute the necessary gradient
 ## Results
 The project includes visualizations that compare true states, classical estimates, and differentiable estimates over time. The results show the effectiveness of combining Optimal Transport and Auto Differentiation in improving state estimation accuracy.
 
+Example outputs can be found in the `Outputs` directory:
+
+- `output1_optimal_transport.png`
+- `output2_optimal_transport.png`
