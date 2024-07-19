@@ -31,8 +31,8 @@ PARTICULAR_FILTERING
 │   ├── auto_differentiation.py
 │   └── optimal_transport.py
 ├── Documents
-│   ├── Annexe-Autodifférenciation.pdf
-│   ├── Cassiopée.pdf
+│   ├── Annexe_Autodifférenciation
+│   ├── Article_resume.pdf
 │   ├── Poster.pdf
 │   ├── Proof_report.pdf
 │   └── Synthesis_report.pdf
