@@ -42,6 +42,7 @@ PARTICULAR_FILTERING
 │   ├── output1_optimal_transport.png
 │   └── output2_optimal_transport.png
 └── README.md
+```
 
 ## Installation
 To run this project, you need to have Python 3.x installed along with the following libraries:
