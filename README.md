@@ -31,9 +31,11 @@ PARTICULAR_FILTERING
 │   ├── auto_differentiation.py
 │   └── optimal_transport.py
 ├── Documents
-│   ├── autodifferenciation.pdf
+│   ├── Annexe-Autodifférenciation.pdf
 │   ├── Cassiopée.pdf
-│   └── Preuves.pdf
+│   ├── Poster.pdf
+│   ├── Proof_report.pdf
+│   └── Synthesis_report.pdf
 ├── Notebooks
 │   ├── Notebook Autodifférenciation.ipynb
 │   ├── Notebook Comparaison Classique et Différentiable.ipynb
@@ -42,6 +44,7 @@ PARTICULAR_FILTERING
 │   ├── output1_optimal_transport.png
 │   └── output2_optimal_transport.png
 └── README.md
+
 ```
 
 ## Installation
