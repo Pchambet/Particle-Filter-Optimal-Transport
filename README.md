@@ -58,6 +58,30 @@ This is the key result. The CMSE (a measure of total error) of our OT-PF (black 
 
 This project requires Python 3.x and the following libraries:
 
+---
+
+## Project Structure
+
 ```bash
 pip install numpy matplotlib
 pip install pot
+
+📦 Particle-Filter-Optimal-Transport
+│
+├── 📂 Code/                             # Main Python scripts
+│   ├── auto_differentiation.py          # Parameter estimation using autodifferentiation
+│   └── optimal_transport.py             # Main implementation of the PF-OT filter
+│
+├── 📂 Documents/                        # Research and analysis reports
+│   ├── Synthesis_report.pdf             # Summary report of the project
+│   ├── Proof_report.pdf                 # Full mathematical derivations
+│   ├── Poster.pdf                       # Project presentation poster
+│   └── Annexe_Autodifferentiation.pdf   # Explanation of Q and R parameter estimation
+│
+├── 📂 Notebooks/                        # Jupyter notebooks for testing and visualization
+│
+├── 📂 Outputs/                          # Output images and generated results
+│
+├── 📂 Images/                           # Illustrations
+│
+└── README.md    
