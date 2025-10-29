@@ -50,6 +50,8 @@ This is the key result. The CMSE (a measure of total error) of our OT-PF (black 
 * **Auto-Differentiation:** `auto_differentiation.py` provides a proof-of-concept for estimating model parameters ($Q$ and $R$) via gradient descent.
 * **Mathematical Proofs:** As the lead on the theoretical side of this project, **I authored the complete mathematical derivations in `Proof_report.pdf`**. This document provides the full derivation of the Optimal Transport dual problem, the saddle-point proof, and the derivation for entropic regularization.
 
+* **[You can read the full `Proof_report.pdf` that I produced here](Documents/Proof_report.pdf)**.
+
 ---
 
 ## Installation
