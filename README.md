@@ -46,9 +46,9 @@ This is the key result. The CMSE (a measure of total error) of our OT-PF (black 
 
 ## Technical Features & Implementation
 
-* **Optimal Transport PF:** `optimal_transport.py` implements the full particle filter using OT resampling. It uses the `POT (Python Optimal Transport)` library to efficiently solve the entropically-regularized problem using **Sinkhorn's Algorithm**.
-* **Auto-Differentiation:** `auto_differentiation.py` provides a proof-of-concept showing how this differentiable filter can be used to estimate model parameters ($Q$ and $R$ noise matrices) via gradient descent.
-* **Mathematical Proofs:** The `/Documents` folder contains a full synthesis report and a `Proof_report.pdf` detailing the mathematical derivations, including the dual form of the OT problem, the saddle-point proof, and the entropic regularization derivation.
+* **Optimal Transport PF:** `optimal_transport.py` implements the full particle filter using OT resampling.
+* **Auto-Differentiation:** `auto_differentiation.py` provides a proof-of-concept for estimating model parameters ($Q$ and $R$) via gradient descent.
+* **Mathematical Proofs:** As the lead on the theoretical side of this project, **I authored the complete mathematical derivations in `Proof_report.pdf`**. This document provides the full derivation of the Optimal Transport dual problem, the saddle-point proof, and the derivation for entropic regularization.
 
 ---
 
