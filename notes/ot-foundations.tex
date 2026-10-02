@@ -1,0 +1,853 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amsfonts,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage{geometry}
+\usepackage{fancyhdr}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{tcolorbox}
+\usepackage{physics}
+\usepackage{microtype}
+\geometry{margin=2.5cm}
+
+\title{\Huge Foundations of Optimal Transport}
+\author{A pedagogical journey}
+\date{}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{Optimal Transport Foundations}
+\lhead{Level 0}
+\cfoot{\thepage}
+
+% Highlight box
+\newtcolorbox{highlight}{colback=blue!5!white,colframe=blue!75!black,boxrule=0.8pt,arc=4pt,left=6pt,right=6pt,top=6pt,bottom=6pt}
+
+\begin{document}
+
+\maketitle
+
+\section*{About This Document – \textit{Optimal Transport Foundations}}
+
+\vspace{1em}
+
+This short document is a pedagogical and structured journey through the world of Optimal Transport (OT), designed for curious minds who want to understand this elegant theory — one that now plays a growing role in modern AI, mathematical economics, and data science. 
+
+\vspace{1em}
+
+This serves as the mathematical version of the powerpoint presentation I gave at the \textbf{Computational Systems Biology Laboratory} workshop at NAIST (Nara Institute of Science and Technology) in May 2025. Many details are left out: the aim is to go through the main ideas and concepts.
+
+\vspace{1em}
+
+The approach is progressive but honest: we talk mathematics. This summary is meant for readers with some mathematical maturity in probability and analysis. But give it a try, you might find it accessible and enlightening!
+
+\vspace{1em}
+
+
+You’ll find:
+\begin{itemize}
+  \item A visual and intuitive introduction to transporting mass;
+  \item A clear recap on probability measures, Wasserstein distances, and duality;
+  \item An explanation of both discrete and continuous cases (Monge vs Kantorovich);
+  \item And finally, a bridge to generative models that leverage Optimal Transport.
+\end{itemize}
+
+\vspace{1em}
+
+This foundational summary also serves as a stepping stone toward deeper theoretical exploration.  
+In particular, I will build upon this work to analyze and understand the recent paper:
+
+\begin{center}
+\textbf{\textit{“Generative Modeling with Optimal Transport Maps”}} (ICLR 2022)\\
+by Litu Rout, Evgeny Burnaev, and Alexander Korotin.
+\end{center}
+
+\vspace{1em}
+
+
+\begin{highlight}
+    \begin{center}
+       \textbf{Let's start} 
+    \end{center}
+\end{highlight}
+
+
+
+\newpage
+\lhead{Level 0}
+\section*{Level 0 - Introduction: The Big Picture}
+Imagine you have a pile of sand arranged in one shape on a table---perhaps a tall, pointy pyramid. Now, you want to rearrange that same sand into another shape---say, a smooth, round mound. The total amount of sand remains the same.
+
+\vspace{0.5em}
+\noindent This gives rise to a natural and powerful question:
+
+\begin{center}
+\textit{What is the most efficient way to move the sand from the source shape to the target shape?}
+\end{center}
+
+This is the central idea behind \textbf{Optimal Transport (OT)}: it provides a mathematically rigorous way to compare two distributions by asking how much ``effort'' it takes to morph one into the other.
+
+Before diving into more advanced concepts like Wasserstein distances or generative models, we need to build a rock-solid understanding of the foundational ideas. That's our goal here.
+
+\section*{1. Probability Measures: The Language of Mass}
+
+Let $X$ be a space (like $\mathbb{R}^n$), and let $\mu$ be a \textbf{probability measure} on $X$.
+
+\begin{itemize}
+    \item Think of $\mu$ as describing how mass or probability is spread over $X$.
+    \item If $A \subset X$ is a subset, then $\mu(A)$ tells you how much mass is located in $A$.
+    \item In simple terms: $\mu$ is a generalization of histograms to continuous spaces.
+\end{itemize}
+
+\textbf{Example (Discrete case):} In $\mathbb{R}^2$, suppose:
+\[
+\mu = \frac{1}{3}\delta_{x_1} + \frac{1}{3}\delta_{x_2} + \frac{1}{3}\delta_{x_3}
+\]
+This describes three equally weighted particles at positions $x_1$, $x_2$, $x_3$.
+
+\section*{2. Transporting a Measure: Pushforward}
+
+Now, suppose we apply a function $T : X \to Y$ that moves every point $x$ in $X$ to some point $T(x)$ in $Y$.
+
+This induces a new distribution $T_\#\mu$ on $Y$, called the \textbf{pushforward of $\mu$ by $T$}. Formally:
+\[
+T_\#\mu(B) := \mu\left(T^{-1}(B)\right) \quad \text{for all measurable } B \subset Y
+\]
+
+\begin{highlight}
+\textit{This means that the amount of mass that ends up in region $B$ of $Y$ is exactly the amount of mass in $\mu$ whose images under $T$ fall into $B$.}
+\end{highlight}
+
+Intuitively:
+\begin{itemize}
+    \item If $x$ is sampled from $\mu$, then $T(x)$ is sampled from $T_\#\mu$.
+    \item So, $T_\#\mu$ is the \textbf{distribution of the image} of $x$ under $T$.
+\end{itemize}
+
+\section*{3. A Simple Illustration}
+
+Let us build some intuition with a concrete example:
+
+\begin{itemize}
+    \item Take $X = \mathbb{R}$ and let $\mu$ be the uniform distribution on the interval $[0,1]$.
+    \item Define a map $T : [0,1] \to [0,1]$ by $T(x) = 1 - x$.
+\end{itemize}
+
+What happens?
+\begin{itemize}
+    \item Every point $x$ is reflected around $x = 0.5$.
+    \item For example: $T(0.2) = 0.8$, $T(0.5) = 0.5$, $T(0.9) = 0.1$.
+    \item The pushforward $T_\#\mu$ is still uniform on $[0,1]$, but the ``orientation'' has flipped.
+\end{itemize}
+
+\begin{highlight}
+This illustrates that a pushforward can change the structure or layout of a distribution without changing its total mass or support.
+\end{highlight}
+
+This kind of reflection is a trivial example, but the same idea generalizes: by applying the right transformation $T$, we can morph one distribution into another in a principled way.
+
+\section*{4. The Big Goal of Optimal Transport}
+
+Suppose we are given two distributions:
+\begin{itemize}
+    \item $\mu$ on a space $X$
+    \item $\nu$ on a space $Y$
+\end{itemize}
+
+The goal of optimal transport is:
+
+\begin{highlight}
+\textbf{Find a map $T : X \to Y$ such that $T_\#\mu = \nu$, and the overall cost of moving each $x$ to $T(x)$ is as small as possible.}
+\end{highlight}
+
+The ``cost'' is defined via a function $c(x, y)$, often $\|x - y\|$ or $\|x - y\|^2$.
+Different choices of cost lead to different flavors of OT (e.g., Wasserstein-1, Wasserstein-2).
+
+\vspace{1em}
+\begin{center}
+\textit{Understanding probability measures and pushforwards is the essential starting point for mastering the rest of Optimal Transport theory.}
+\end{center}
+
+
+\newpage
+\lhead{Level 1}
+\section*{Level 1 – Monge, Kantorovich, and Duality}
+
+\subsection*{1. The Monge Formulation (1781)}
+
+Gaspard Monge proposed a very intuitive version of the transport problem:
+
+\begin{highlight}
+Given two distributions $\mu$ (source) and $\nu$ (target), find a transport map $T : X \to Y$ such that $T_\#\mu = \nu$ and minimizes the total cost
+\[
+\int_X c(x, T(x))\,d\mu(x).
+\]
+\end{highlight}
+
+\noindent Here, $c(x, y)$ is the \textbf{cost of moving} one unit of mass from $x$ to $y$.
+
+\textbf{Key limitation:} Monge’s formulation does not allow \emph{splitting mass}. If a point mass must go somewhere, it can only go to one destination.
+
+\vspace{0.5em}
+This becomes problematic, for instance, if:
+\begin{itemize}
+  \item $\mu$ is a single point (Dirac delta), and
+  \item $\nu$ is spread out.
+\end{itemize}
+Then no such $T$ exists.
+
+\subsection*{2. The Kantorovich Relaxation (1942)}
+
+Leonid Kantorovich proposed a relaxation that allows mass to split.
+
+\begin{highlight}
+Instead of finding a transport map $T$, find a joint probability measure $\pi(x, y)$ over $X \times Y$ with marginals $\mu$ and $\nu$.
+\end{highlight}
+
+This $\pi$ tells us how much mass is transported from $x$ to $y$.
+
+\textbf{Formal problem:}
+\[
+\inf_{\pi \in \Pi(\mu, \nu)} \int_{X \times Y} c(x, y)\,d\pi(x, y)
+\]
+where $\Pi(\mu, \nu)$ is the set of all couplings with marginals $\mu$ and $\nu$.
+
+\vspace{0.5em}
+This formulation:
+\begin{itemize}
+  \item Always has a solution under mild conditions
+  \item Can be efficiently optimized
+  \item Includes Monge’s case as a special (deterministic) scenario
+\end{itemize}
+
+\section*{From Monge to Kantorovich: Why the Relaxation Is Needed}
+
+\subsection*{The Problem with Monge}
+In Monge's formulation, we try to find a \emph{map} $T : X \to Y$ that pushes one distribution $\mu$ onto another $\nu$, minimizing a transport cost:
+\[
+\inf_{T : T_\#\mu = \nu} \int_X c(x, T(x)) \, d\mu(x)
+\]
+
+But this approach has a major limitation:
+
+\begin{highlight}
+It does not allow \textbf{splitting mass}. Each point $x$ must be sent entirely to a single $T(x)$.
+\end{highlight}
+
+This becomes an issue when, for instance:
+\begin{itemize}
+  \item $\mu$ is a single Dirac mass (e.g., $\delta_x$)
+  \item $\nu$ is a distribution over multiple points (e.g., a mixture of Diracs)
+\end{itemize}
+
+In such cases, there's \emph{no way} to find a map $T$ such that $T_\#\mu = \nu$. The Monge problem has \textbf{no solution}.
+
+\subsection*{The Kantorovich Idea: A Probabilistic View}
+To solve this, Kantorovich proposed a \textbf{relaxation}:
+
+\begin{highlight}
+Rather than assigning a single destination $T(x)$ for each $x$, assign a \emph{distribution over possible destinations}. That is: a \textbf{coupling} $\pi(x, y)$.
+\end{highlight}
+
+Formally:
+\begin{itemize}
+  \item Let $\pi \in \Pi(\mu, \nu)$ be a joint probability distribution over $X \times Y$.
+  \item The marginals must satisfy:
+  \[
+  \int_Y \pi(x, y)\,dy = \mu(x), \quad \int_X \pi(x, y)\,dx = \nu(y)
+  \]
+  \item The cost becomes:
+  \[
+  \inf_{\pi \in \Pi(\mu, \nu)} \int_{X \times Y} c(x, y)\, d\pi(x, y)
+  \]
+\end{itemize}
+
+Now:
+\begin{itemize}
+  \item Mass at $x$ can be split across multiple $y$ destinations.
+  \item The problem is \textbf{convex} and always has a solution under mild conditions.
+  \item When a deterministic map exists, the solution $\pi$ collapses to a Monge map: $\pi = (\text{id}, T)_\#\mu$.
+\end{itemize}
+
+\subsection*{Summary}
+\begin{center}
+\begin{tcolorbox}[colback=white,colframe=blue!75!black,title=Monge vs. Kantorovich]
+\begin{itemize}
+  \item \textbf{Monge:} deterministic, no splitting, can fail to exist
+  \item \textbf{Kantorovich:} probabilistic, allows splitting, always solvable
+  \item \textbf{Key bridge:} when a Monge map exists, it's embedded in Kantorovich’s solution
+\end{itemize}
+\end{tcolorbox}
+\end{center}
+
+This relaxation is what opened the door to a full mathematical theory of transport---from convex analysis to duality, geometry, and machine learning applications.
+
+
+\subsection*{3. Duality: The Power of Potentials}
+
+The Kantorovich problem has a beautiful dual form:
+
+\[
+\sup_{u, v \in \mathcal{C}} \left[ \int u(x)\,d\mu(x) + \int v(y)\,d\nu(y) \right] \quad \text{such that } u(x) + v(y) \leq c(x, y)
+\]
+
+Here:
+\begin{itemize}
+  \item $u$ and $v$ are called \textbf{Kantorovich potentials}
+  \item They encode the optimal “price” structure of transport
+\end{itemize}
+
+Duality connects optimization to geometry. It’s the foundation of modern computational OT and allows recovery of the optimal transport map in special cases (e.g., for quadratic costs).
+
+\section*{From Kantorovich to the Dual Form}
+
+\subsection*{Why Do We Introduce a Dual?}
+In optimization, the \textbf{dual problem} offers a different perspective on the same question. Often:
+\begin{itemize}
+  \item The primal formulation describes \emph{what} we want to do.
+  \item The dual tells us \emph{how costly} the constraints are.
+  \item Solving the dual can be easier, and yields important insights into the structure of the solution.
+\end{itemize}
+
+To build a dual, we use a powerful tool from constrained optimization: the \textbf{Lagrangian}. It combines the original objective with its constraints using \emph{multipliers} that measure how much each constraint “hurts.”
+
+\subsection*{Step-by-Step: The Lagrangian Approach}
+We start with the \textbf{primal Kantorovich problem}:
+\[
+\inf_{\pi \in \Pi(\mu, \nu)} \int_{X \times Y} c(x, y) \, d\pi(x, y)
+\]
+subject to:
+\[
+\int_Y \pi(x, y)\, dy = \mu(x), \quad \int_X \pi(x, y)\, dx = \nu(y)
+\]
+
+To incorporate the constraints, we use the method of \textbf{Lagrange multipliers}. Let:
+\begin{itemize}
+  \item $u : X \to \mathbb{R}$ be a Lagrange multiplier (or "potential") for the marginal constraint on $\mu$
+  \item $v : Y \to \mathbb{R}$ for the marginal on $\nu$
+\end{itemize}
+
+Introduce Lagrange multipliers:
+\begin{itemize}
+  \item $u(x)$ for the constraint $\int_Y \pi(x, y)\,dy = \mu(x)$
+  \item $v(y)$ for the constraint $\int_X \pi(x, y)\,dx = \nu(y)$
+\end{itemize}
+We can think of $u(x)$ and $v(y)$ as the \textbf{costs} associated with moving mass from $x$ to $y$.
+The Lagrangian $\mathcal{L}$ combines the primal objective with the constraints:
+
+\[
+\mathcal{L}(\pi, u, v) = \int_{X \times Y} c(x, y) \, d\pi(x, y)
+- \int_X u(x)\left[\int_Y d\pi(x, y) - d\mu(x)\right]
+- \int_Y v(y)\left[\int_X d\pi(x, y) - d\nu(y)\right]
+\]
+Reorganizing:
+\begin{align*}
+\mathcal{L}(\pi, u, v) =
+&\int_{X \times Y} \left[ c(x, y) - u(x) - v(y) \right] d\pi(x, y) \\
+&+ \int_X u(x)\,d\mu(x) + \int_Y v(y)\,d\nu(y)
+\end{align*}
+
+Now, take the \textbf{infimum over all couplings} $\pi$:
+\begin{itemize}
+  \item If $c(x, y) - u(x) - v(y) < 0$ anywhere, the infimum is $-\infty$.
+  \item So to keep $\mathcal{L}$ bounded below, we must enforce:
+\[
+\boxed{u(x) + v(y) \leq c(x, y)} \quad \text{for all } (x, y)
+\]
+\end{itemize}
+
+Hence, the \textbf{dual problem} becomes:
+\[
+\sup_{u, v} \left\{ \int_X u(x)\, d\mu(x) + \int_Y v(y)\, d\nu(y) \right\} \quad \text{subject to } u(x) + v(y) \leq c(x, y)
+\]
+
+This is the \textbf{Kantorovich dual formulation}.
+
+\vspace{1em}
+\begin{tcolorbox}[colback=blue!5!white, colframe=blue!75!black, title=Takeaway]
+The dual variables $u$ and $v$ can be interpreted as \emph{economic potentials}---they represent how much we're willing to pay to move mass from $x$ to $y$, given cost $c(x, y)$.
+\end{tcolorbox}
+
+
+
+
+\subsection*{4. Summary Table}
+
+\begin{center}
+\begin{tabular}{|c|c|c|}
+\hline
+\textbf{Formulation} & \textbf{Object} & \textbf{Allows Splitting?} \\\hline
+Monge & $T : X \to Y$ & No \\\hline
+Kantorovich (Primal) & $\pi(x, y)$ & Yes \\\hline
+Kantorovich (Dual) & $u(x), v(y)$ & Yes \\\hline
+\end{tabular}
+\end{center}
+
+\vspace{1em}
+\begin{center}
+\textit{Monge is beautiful but rigid. Kantorovich is flexible and powerful. Duality is the lens that unites them.}
+\end{center}
+
+\newpage
+\lhead{Level 2}
+\section*{Level 2 - Understanding Wasserstein Distances}
+
+\subsection*{The Big Idea: Distance Between Distributions}
+Imagine you have two piles of sand: one represents $\mu$, the other $\nu$. Wasserstein distance answers:
+
+\begin{highlight}
+\textbf{How much effort does it take to reshape $\mu$ into $\nu$?}
+\end{highlight}
+
+But unlike most distances between distributions (e.g., KL divergence, Total Variation), Wasserstein is \emph{geometry-aware}. It respects the actual locations of the mass.
+
+\subsection*{The Formal Definition (Wasserstein-$p$)}
+Let $p \geq 1$ and $c(x,y) = \|x - y\|^p$. Then the \textbf{Wasserstein-$p$ distance} is:
+\[
+W_p(\mu, \nu) = \left( \inf_{\pi \in \Pi(\mu, \nu)} \int_{X \times Y} \|x - y\|^p \, d\pi(x, y) \right)^{1/p}
+\]
+
+Key components:
+\begin{itemize}
+  \item $\Pi(\mu, \nu)$: all joint distributions (couplings) with marginals $\mu$ and $\nu$
+  \item $\|x - y\|^p$: cost of moving a unit mass from $x$ to $y$
+  \item The $p$-th root makes it a proper distance
+\end{itemize}
+
+\subsection*{Interpreting $W_p$}
+\begin{itemize}
+  \item $W_1$: Total work — move mass over minimum distance (used in WGAN)
+  \item $W_2$: Minimizes squared distances — behaves smoothly, useful in theory
+  \item $W_\infty$: The farthest distance any mass must travel
+\end{itemize}
+
+\begin{tcolorbox}[colback=white, colframe=blue!50!black, title=Geometric Meaning]
+\textbf{Wasserstein distance} measures the ``optimal way'' to morph one shape into another — mass by mass — according to physical cost.
+\end{tcolorbox}
+
+\subsection*{Why It Matters}
+\begin{itemize}
+  \item Wasserstein distances define \emph{meaningful} geometry over the space of probability distributions
+  \item They make sense even when distributions have disjoint support (unlike KL)
+  \item They are the foundation of generative models, image restoration, domain adaptation, and more
+\end{itemize}
+
+\vspace{0.5em}
+\textbf{Example:} Let $\mu$ be the uniform distribution on the interval $[0, 1]$, and let $\nu$ be uniform on $[2, 3]$. That is:
+\[
+\mu = \mathcal{U}[0, 1], \quad \nu = \mathcal{U}[2, 3]
+\]
+
+The mass is the same in both distributions — but it's located in different places.
+
+Then:
+\[
+W_1(\mu, \nu) = \int_0^1 |x - (x + 2)|\,dx = \int_0^1 2\,dx = 2
+\]
+\[
+W_2(\mu, \nu)^2 = \int_0^1 (x - (x + 2))^2 \, dx = \int_0^1 4 \, dx = 4 \quad \Rightarrow \quad W_2(\mu, \nu) = 2
+\]
+
+\begin{center}
+\textit{The optimal transport map here is $T(x) = x + 2$: a pure shift.}\\
+Each mass element $x$ from $[0,1]$ is simply moved to $x+2 \in [2,3]$.
+\end{center}
+
+\subsubsection*{Example: Asymmetric Mass Shift}
+
+Let:
+\[
+\mu = 0.9\,\delta_0 + 0.1\,\delta_{10}, \quad \nu = \delta_1
+\]
+
+So:
+\begin{itemize}
+  \item 90\% of the mass in $\mu$ is at $x = 0$,
+  \item 10\% is far away, at $x = 10$,
+  \item $\nu$ has all its mass at $y = 1$.
+\end{itemize}
+
+We compute the optimal transport:
+
+\begin{itemize}
+  \item Move $0.9$ mass from $0 \to 1$
+  \item Move $0.1$ mass from $10 \to 1$
+\end{itemize}
+
+Then:
+
+\[
+W_1(\mu, \nu) = 0.9 \cdot |0 - 1| + 0.1 \cdot |10 - 1| = 0.9 \cdot 1 + 0.1 \cdot 9 = 0.9 + 0.9 = 1.8
+\]
+
+\[
+W_2^2(\mu, \nu) = 0.9 \cdot (0 - 1)^2 + 0.1 \cdot (10 - 1)^2 = 0.9 \cdot 1 + 0.1 \cdot 81 = 0.9 + 8.1 = 9.0
+\quad \Rightarrow \quad W_2(\mu, \nu) = 3
+\]
+
+\begin{tcolorbox}[colback=blue!2!white, colframe=blue!90!black, title=Conclusion]
+Here, $W_1 = 1.8$, but $W_2 = 3$ — the outlier at $x = 10$ increases $W_2$ much more than $W_1$.
+\end{tcolorbox}
+
+\begin{center}
+\textit{Wasserstein-$1$ sees “how far things move”.\\
+Wasserstein-$2$ sees “how badly they move”.}
+\end{center}
+
+\newpage
+\lhead{Level 3}
+\section*{Level 3 – Optimal Transport in Generative Models}
+
+\subsection*{Why Use Optimal Transport in Generative Models?}
+
+When we build a generative model, we want to turn simple random noise (like a Gaussian) into complex data — like images, speech, or molecules. 
+
+\begin{highlight}
+\textbf{Optimal Transport (OT) tells us how to move one distribution into another — in the most efficient way.}
+\end{highlight}
+
+In this setting:
+\begin{itemize}
+  \item $\mu$ is our known distribution (e.g., standard normal noise),
+  \item $\nu$ is the target data distribution (e.g., real images),
+  \item The OT map $T^*$ gives us the best way to turn samples from $\mu$ into samples from $\nu$.
+\end{itemize}
+
+\subsection*{Two Strategies}
+
+\begin{enumerate}
+  \item \textbf{Use OT distance as a loss function:} like in Wasserstein GANs (WGAN), we use $W_1(\mu, \nu)$ to guide the generator $G$.
+  \item \textbf{Use the OT map directly as the generator:} the idea in the paper. Here, we don’t need a discriminator — we directly learn the map $T^*$.
+\end{enumerate}
+
+\subsection*{Why $W_2$ Instead of $W_1$?}
+
+The paper focuses on $W_2$ — the squared Wasserstein distance — because it has a powerful structure:
+
+\begin{itemize}
+  \item Under mild conditions, the optimal map has the form:
+  \[
+  T^*(x) = \nabla \psi(x), \quad \text{for a convex function } \psi.
+  \]
+  \item This means we can learn $\psi$ as a neural network, and recover $T$ just by taking its gradient.
+\end{itemize}
+
+This would not be possible with $W_1$ — we’d get a distance, but not an explicit map.
+
+\begin{tcolorbox}[colback=blue!4!white, colframe=blue!80!black, title=Bottom Line]
+OT gives us more than a number — it gives us a generator.
+With $W_2$, we can turn random noise into structured data without adversarial training.
+\end{tcolorbox}
+
+\subsection*{What Happens Next}
+In the next levels, we’ll see:
+\begin{itemize}
+  \item The strength of $W_2$ for deep theoretical and practical reasons,
+  \item How to learn $\psi$ and $T$ from data,
+  \item And how this builds real-world generative models (e.g., for image synthesis, restoration).
+\end{itemize}
+
+\newpage
+\lhead{Level 4}
+\section*{Level 4 – Learning the Optimal Transport Map}
+
+\subsection*{Objective: Not Just Distance — the Map Itself}
+In many applications, we are not just interested in the value of the Wasserstein distance, but in the \textbf{optimal map} $T^*$ that pushes $\mu$ to $\nu$.
+
+\begin{highlight}
+\textbf{The goal is to learn a function $T$ such that $T_\#\mu = \nu$ and the transport cost $\int c(x, T(x)) \, d\mu(x)$ is minimized.}
+\end{highlight}
+
+This leads us into the realm of \textbf{map-based optimal transport}. Here, the map $T$ can be seen as a 
+
+\begin{itemize}
+  \item \textbf{Generator:} in generative models,
+  \item \textbf{Restorer:} in image restoration tasks,
+  \item \textbf{Interpolator:} in shape morphing or style transfer.
+\end{itemize}
+
+\subsection*{From Dual to Map: Brenier's Insight (W$_2$ Case)}
+When the cost is quadratic $c(x,y) = \frac{1}{2}\|x - y\|^2$, and $\mu$ is absolutely continuous:
+
+\begin{tcolorbox}[colback=blue!5!white, colframe=blue!75!black, title=Brenier's Theorem (1991)]
+There exists a convex function $\phi : \mathbb{R}^d \to \mathbb{R}$ such that the optimal map is:
+\[
+T^*(x) = \nabla \phi(x)
+\]
+\end{tcolorbox}
+
+This result is foundational — it means that \textbf{the optimal transport map is a gradient of a convex potential}. This links OT to convex analysis, PDEs, and deep learning.
+
+\subsection*{Learning $T$ via a Saddle Point Formulation}
+In practice, we often solve a saddle point problem over two neural networks:
+\begin{itemize}
+  \item $\psi(y)$ approximates a convex potential
+  \item $T(x)$ is trained to match the gradient of $\psi$
+\end{itemize}
+
+An example (for $W_2$):
+\[
+\min_{\psi} \max_{T} \left[ \mathbb{E}_{x \sim \mu} \langle x, T(x) \rangle - \psi(T(x)) + \mathbb{E}_{y \sim \nu} \psi(y) \right]
+\]
+
+This yields $T^*(x) \approx \nabla \psi^*(x)$, the gradient of the convex conjugate, when $\psi$ is optimal.
+
+\subsection*{In Detail: The Special Case of Quadratic Cost, $W_2$}
+Let the cost be $c(x,y) = \frac{1}{2}\|x - y\|^2$. The primal Kantorovich formulation becomes:
+\[
+\frac{1}{2} W_2^2(\mu, \nu) = \inf_{\pi \in \Pi(\mu, \nu)} \int \frac{1}{2}\|x - y\|^2 \, d\pi(x,y)
+\]
+
+The dual formulation is:
+\[
+\sup_{u, v} \left\{ \int u(x)\,d\mu(x) + \int v(y)\,d\nu(y) \right\} \quad \text{subject to } u(x) + v(y) \leq \frac{1}{2}\|x - y\|^2
+\]
+
+Now introduce the \textbf{$c$-transform}. For a function $v$, define its $c$-transform:
+\[
+v^c(x) := \inf_{y \in \mathbb{R}^d} \left\{ \frac{1}{2}\|x - y\|^2 - v(y) \right\}
+\]
+
+Similarly, $u^c(y) := \inf_{x} \left\{ \frac{1}{2}\|x - y\|^2 - u(x) \right\}$.
+
+\subsection*{Reduction to a Single Potential via Legendre Transform}
+Set:
+\[
+\psi(y) := \frac{1}{2}\|y\|^2 - v(y)
+\quad \Rightarrow \quad v(y) = \frac{1}{2}\|y\|^2 - \psi(y)
+\]
+Then the $c$-transform becomes:
+\begin{align*}
+v^c(x)
+&= \inf_y \left\{ \frac{1}{2}\|x - y\|^2 - \left( \frac{1}{2}\|y\|^2 - \psi(y) \right) \right\} \\
+&= \inf_y \left\{ \frac{1}{2}\|x\|^2 - \langle x, y \rangle + \psi(y) \right\} \\
+&= \frac{1}{2}\|x\|^2 - \sup_y \left\{ \langle x, y \rangle - \psi(y) \right\} \\
+&= \frac{1}{2}\|x\|^2 - \psi^*(x)
+\end{align*}
+where $\psi^*$ is the \textbf{Legendre (convex) conjugate} of $\psi$.
+
+The dual becomes:
+\[
+\frac{1}{2} W_2^2(\mu, \nu) = \int \frac{1}{2}\|x\|^2 \, d\mu(x) + \int \frac{1}{2}\|y\|^2 \, d\nu(y) - \inf_{\psi \text{ convex}} \left\{ \int \psi^*(x) \, d\mu(x) + \int \psi(y) \, d\nu(y) \right\}
+\]
+
+This is a fundamental variational problem in convex analysis. With $\psi$ optimal, the optimal map is the gradient of its convex conjugate (Brenier's potential is $\phi = \psi^*$):
+\[
+T^*(x) = \nabla \psi^*(x)
+\]
+
+\subsection*{Learning $\psi$ via Neural Networks}
+In practice, we parameterize $\psi$ by a neural network and optimize:
+\[
+\min_\psi \left\{ \mathbb{E}_{x \sim \mu}[\psi^*(x)] + \mathbb{E}_{y \sim \nu}[\psi(y)] \right\}
+\]
+
+The difficulty is $\psi^*$: evaluating the conjugate is itself an optimisation problem for every $x$. This is what motivates the saddle-point reformulation of Level 5, which yields both the OT distance and the optimal transport map.
+
+\subsection*{Applications and Benefits}
+\begin{itemize}
+  \item Learn a \textbf{generator} $T = \nabla \psi^*$ that is structure-aware and cost-efficient.
+  \item \textbf{Better stability} than adversarial GANs: the inner maximisation has a clear meaning (a conjugate), and there is no discriminator to collapse.
+  \item \textbf{Interpretability}: the potential $\psi$ encodes a landscape that shapes how mass moves.
+\end{itemize}
+
+\begin{tcolorbox}[colback=blue!3!white, colframe=blue!80!black, title=Summary]
+When $c(x,y) = \frac{1}{2}\|x - y\|^2$, OT reduces to a convex variational problem with a single potential function.
+\textbf{The optimal map is the gradient of the convex conjugate of that potential.}
+\end{tcolorbox}
+
+
+
+\newpage
+\lhead{Level 5}
+\section*{Level 5 – Practical Recovery of $\psi$ and $T$ in the Paper}
+
+In the ICLR 2022 paper \textit{Generative Modeling with Optimal Transport Maps}, the authors propose a practical method to recover both the potential $\psi$ and the optimal transport map $T$ for the quadratic cost (Wasserstein-2).
+
+\subsection*{From Theory to Practice: Saddle Point Formulation}
+
+We begin from the dual reformulated with a single convex potential $\psi$:
+\[
+\inf_{\psi} \left\{ \mathbb{E}_{x \sim \mu} \left[ \psi^*(x) \right] + \mathbb{E}_{y \sim \nu} \left[ \psi(y) \right] \right\}
+\]
+Instead of computing the Legendre conjugate $\psi^*$ explicitly, the authors propose a saddle-point reformulation:
+\[
+\inf_{\psi} \sup_{T} \left\{ \mathbb{E}_{x \sim \mu} \left[ \langle x, T(x) \rangle - \psi(T(x)) \right] + \mathbb{E}_{y \sim \nu} \left[ \psi(y) \right] \right\}
+\]
+
+This allows simultaneous learning of $\psi$ and $T$.
+
+\subsection*{Optimization Procedure (Algorithm 1)}
+
+\begin{itemize}
+  \item $\psi$ is parameterized by a neural network $\psi_\omega : \mathbb{R}^D \to \mathbb{R}$.
+  \item $T$ is also parameterized by a neural network $T_\theta : \mathbb{R}^D \to \mathbb{R}^D$.
+  \item The authors perform alternating stochastic gradient steps:
+  \begin{itemize}
+    \item \textbf{Step 1:} Fix $\psi$, maximize over $T$:
+    \[
+    \mathbb{E}_{x \sim \mu} \left[ \langle x, T(x) \rangle - \psi(T(x)) \right]
+    \]
+    \item \textbf{Step 2:} Fix $T$, minimize over $\psi$:
+    \[
+    \mathbb{E}_{x \sim \mu} \left[ -\psi(T(x)) \right] + \mathbb{E}_{y \sim \nu} \left[ \psi(y) \right]
+    \]
+  \end{itemize}
+  \item This is done using mini-batches drawn from $\mu$ and $\nu$, with Adam optimizer.
+  \item The update frequencies $K_G$ (for $T$) and $K_\psi$ (for $\psi$) can differ (e.g. $K_G = 5$, $K_\psi = 1$).
+\end{itemize}
+
+\subsection*{Theoretical Justification}
+If $\psi$ is convex and smooth, then:
+\[
+T^*(x) = \nabla \psi^*(x) \quad \text{and} \quad \nabla \psi(T^*(x)) = x
+\]
+
+Thus, $T$ approximates the \emph{inverse} of $\nabla \psi$. The equilibrium of the saddle point problem yields both:
+\begin{itemize}
+  \item The optimal transport cost $W_2^2(\mu, \nu)$
+  \item The optimal map $T^*(x)$ without explicitly computing $\psi^*$
+\end{itemize}
+
+\subsection*{Stabilization: Regularization and Penalties}
+To stabilize training, the authors add a regularization term to the $\psi$-update, such as:
+\[
+\lambda \cdot \left\| \mathbb{E}_{x \sim \mu} \nabla \psi(T(x)) - x \right\|^2
+\]
+which vanishes at the optimum due to the theoretical condition $\nabla \psi(T^*(x)) = x$.
+
+This regularizer improves convergence and accuracy, especially in high-dimensional settings.
+
+\subsection*{Summary of What Is Learned}
+\begin{itemize}
+  \item $\psi$: a convex function (neural network) modeling the potential.
+  \item $T$: a transport map, trained to maximize the dual objective.
+\end{itemize}
+
+The final result is a map $T$ that can be directly applied as a generator in high-dimensional image space — with no need for autoencoders or adversarial critics.
+
+\begin{tcolorbox}[colback=blue!2!white, colframe=blue!80!black, title=In Practice]
+The paper minimizes $\psi$ and maximizes $T$ alternately — solving a saddle point problem that recovers both the OT map and the potential.
+\end{tcolorbox}
+
+
+\newpage
+\lhead{Level 6}
+\section*{Level 6 – Generalization to Unequal Dimensions}
+
+\subsection*{The Challenge}
+
+In many practical generative tasks, we want to map from a low-dimensional latent space $\mathbb{R}^H$ (e.g., $H = 100$) to a high-dimensional data space $\mathbb{R}^D$ (e.g., $D = 784$ for images). 
+
+But classical OT theory assumes $\mu$ and $\nu$ lie in the \emph{same} space.
+
+\begin{highlight}
+\textbf{How can we define optimal transport when $H \neq D$?}
+\end{highlight}
+
+\subsection*{The Solution: Embed the Latent Space}
+
+The paper resolves this by introducing a fixed embedding function:
+\[
+Q : \mathbb{R}^H \to \mathbb{R}^D
+\]
+This map projects the low-dimensional space into the same ambient space as the data.
+
+Once embedded, we define the cost:
+\[
+c(x, y) = \frac{1}{2} \|Q(x) - y\|^2
+\]
+and solve the OT problem in $\mathbb{R}^D$.
+
+\subsection*{The Min-Max Formulation Still Works}
+
+With this new cost, the dual objective becomes:
+\[
+\min_{\psi} \max_{G} \ 
+\mathbb{E}_{x \sim \mu} \left[ \langle Q(x), G(x) \rangle - \psi(G(x)) \right] + 
+\mathbb{E}_{y \sim \nu} \left[ \psi(y) \right]
+\]
+
+Here:
+\begin{itemize}
+  \item $G : \mathbb{R}^H \to \mathbb{R}^D$ is the generator,
+  \item $\psi : \mathbb{R}^D \to \mathbb{R}$ is the potential function,
+  \item $Q$ is a fixed upsampling map (e.g., bicubic interpolation from $8\times8$ to $32\times32$).
+\end{itemize}
+
+\subsection*{Why This Is Important}
+
+\begin{itemize}
+  \item It allows the method to work with latent variables — just like GANs or VAEs.
+  \item It bypasses the need for an encoder: we only go from noise to data, not back.
+  \item It enables direct generation in image space, using only optimal transport.
+\end{itemize}
+
+\begin{tcolorbox}[colback=blue!5!white, colframe=blue!80!black, title=Key Idea]
+By embedding $\mu$ into the ambient space using $Q$, we can define a valid OT problem even when dimensions differ.
+The learned generator $G$ replaces the transport map.
+\end{tcolorbox}
+
+\subsection*{In Practice}
+In the experiments:
+\begin{itemize}
+  \item $x \sim \mu$ is sampled from $\mathcal{N}(0, I_H)$,
+  \item $Q(x)$ is a low-res upsampling (e.g., from $8\times8$ to $32\times32$),
+  \item $G(x)$ learns to refine this into a realistic sample from $\nu$.
+\end{itemize}
+
+This approach preserves the geometry of OT while maintaining compatibility with standard generative modeling pipelines.
+
+\vspace{1em}
+
+\lhead{Level 7}
+\section*{Level 7 – Experiments and Limitations}
+
+\subsection*{Generative Modeling from Noise}
+
+The authors evaluate their method on classical generative tasks:
+\begin{itemize}
+  \item \textbf{Datasets:} MNIST ($28\times28$), CIFAR10 ($32\times32$), CelebA ($64\times64$).
+  \item \textbf{Latent distribution:} $x \sim \mathcal{N}(0, I)$ in $\mathbb{R}^H$.
+  \item \textbf{Fixed embedding $Q$:} Bicubic upsampling of $8\times8$ latent noise to full resolution.
+\end{itemize}
+
+The generator $G$ learns to push these embedded samples toward real data.
+
+\subsection*{Performance (FID Score)}
+
+Fréchet Inception Distance (FID) is used to measure quality of generated samples. Lower is better.
+
+\begin{itemize}
+  \item On MNIST and CIFAR10, the OT-based method matches or improves upon WGAN, AE-OT, and OT-GAN.
+  \item On CelebA, results are visually sharp and FID is competitive.
+\end{itemize}
+
+\subsection*{Unpaired Image Restoration}
+
+The model is also tested on tasks where noisy inputs $\mu$ must be mapped to clean targets $\nu$:
+\begin{itemize}
+  \item \textbf{Denoising:} Gaussian noise added to images.
+  \item \textbf{Inpainting:} Random patches are masked.
+  \item \textbf{Colorization:} Grayscale to color images.
+\end{itemize}
+
+Despite being unpaired (no $x \leftrightarrow y$ examples), the learned map $G$ recovers realistic outputs.
+
+\subsection*{Limitations and Open Questions}
+
+\begin{itemize}
+  \item \textbf{Scalability:} Although effective at $32\times32$ or $64\times64$, the model has not yet been scaled to high-res (e.g., $256\times256$).
+  \item \textbf{Choice of $Q$:} The fixed embedding $Q$ works well empirically, but its design is somewhat heuristic (e.g., bicubic). Learning $Q$ jointly might improve flexibility.
+  \item \textbf{Convexity Assumption:} The method relies on approximating $\psi$ as convex. While Input Convex Neural Networks (ICNNs) can enforce this, they limit architectural choices.
+  \item \textbf{Optimization Stability:} The saddle-point formulation is simpler than GANs but still prone to local optima and training instabilities.
+\end{itemize}
+
+\begin{tcolorbox}[colback=blue!5!white, colframe=blue!80!black, title=Key Insight]
+OT maps can be learned directly in image space — without adversarial losses, and with minimal supervision. 
+The method scales well to small- and mid-resolution domains, while leaving room for extensions.
+\end{tcolorbox}
+
+
+\end{document}

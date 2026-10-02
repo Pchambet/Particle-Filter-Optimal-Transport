@@ -1,0 +1,269 @@
+
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[most]{tcolorbox}
+\usepackage{amsmath, amssymb}
+\usepackage{bm}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{lmodern}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{color}
+\usepackage{fancyvrb}
+\usepackage{geometry}
+\geometry{margin=1in}
+
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},
+    commentstyle=\color{codegray},
+    keywordstyle=\color{blue},
+    numberstyle=\tiny\color{gray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,
+    breaklines=true,
+    captionpos=b,
+    keepspaces=true,
+    numbers=left,
+    numbersep=5pt,
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+    tabsize=2
+}
+
+\lstset{style=mystyle}
+\title{\textbf{Generative Modeling with Optimal Transport Maps}\\[0.3em]\large Paper review: Rout, Burnaev \& Korotin, ICLR 2022}
+\author{Pierre Chambet}
+\date{May 2025}
+
+\begin{document}
+\maketitle
+
+\section*{Key Formulas: AE-OT vs OT-map (ICLR 2022)}
+
+This summary compares the core mathematical formulations of AE-OT (Autoencoder + Optimal Transport) and the OT-map method from ``Generative Modeling with Optimal Transport Maps'' (ICLR 2022).
+
+\subsection*{\textbf{AE-OT: Autoencoder + Optimal Transport}}
+
+\textbf{Phase 1 – Autoencoder training (supervised reconstruction):}
+\[
+\min_{E, D} \; \mathbb{E}_{y \sim \nu} \left[ \| D(E(y)) - y \|^2 \right]
+\]
+\begin{itemize}
+    \item $y \in \mathbb{R}^D$: real image
+    \item $z = E(y) \in \mathbb{R}^H$: latent representation
+\end{itemize}
+
+\textbf{Phase 2 – Discrete OT between noise and latent codes:} \\
+Let $x_i \sim \mu$ (noise), and $z_j = E(y_j) \sim E_\# \nu$.
+
+\textbf{Option 1: Monge OT (with permutation):}
+\[
+\min_T \sum_{i=1}^n \| T(x_i) - z_{\pi(i)} \|^2
+\]
+
+\textbf{Option 2: Entropic Kantorovich OT with barycentric projection:}
+\[
+\min_P \sum_{i,j} P_{ij} \| x_i - z_j \|^2 + \varepsilon \sum_{i,j} P_{ij} \log P_{ij}
+\]
+\[
+T(x_i) = \sum_j P_{ij} z_j \quad \text{(barycenter)}
+\]
+
+\textbf{Final generation:}
+\[
+\hat{y} = D(T(x))
+\]
+
+\subsection*{\textbf{OT-map (ICLR 2022)}}
+
+\textbf{Setting:} Learn transport map $G(x) = T(Q(x))$ directly in the image space $\mathbb{R}^D$, without any encoder.
+
+\textbf{Min--max formulation (dual of OT):}
+\[
+\min_{\psi} \max_{G} \left[ \mathbb{E}_{x \sim \mu} \left( \langle Q(x), G(x) \rangle - \psi(G(x)) \right) + \mathbb{E}_{y \sim \nu} \psi(y) \right]
+\]
+\begin{itemize}
+    \item $Q(x) \in \mathbb{R}^D$: embedded noise (e.g., via upsampling)
+    \item $G(x) \in \mathbb{R}^D$: image generated from noise
+    \item $\psi(y)$: Kantorovich potential (convex function)
+\end{itemize}
+
+\textbf{Optimal transport geometry:}
+\[
+G(x) \approx \arg\max_y \left( \langle Q(x), y \rangle - \psi(y) \right)
+\quad \Rightarrow \quad G(x) \in \partial \psi^*(Q(x))
+\]
+
+\textbf{No decoder needed — generation is direct:}
+\[
+\hat{y} = G(x)
+\]
+
+\subsection*{Comparison}
+
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Feature} & \textbf{AE-OT} & \textbf{OT-map (this paper)} \\
+\hline
+Space of transport & Latent space $\mathbb{R}^H$ & Ambient space $\mathbb{R}^D$ \\
+Needs autoencoder? & Yes & No \\
+Uses encoder/decoder? & Yes: $E$, $D$ & No \\
+Transport computed via & Discrete OT (Monge or Sinkhorn) & Min--max dual OT formulation \\
+Decoding step & $\hat{y} = D(T(x))$ & $\hat{y} = G(x)$ (direct output) \\
+Type of supervision & Point set alignment & Distribution-level alignment \\
+\hline
+\end{tabular}
+\end{center}
+
+
+\section*{Derivation of the OT-map Objective}
+
+\subsection*{1. Monge’s Problem (Primal Formulation)}
+
+Let \(\mu\) and \(\nu\) be two probability measures defined on metric spaces \(\mathcal{X}, \mathcal{Y} \subset \mathbb{R}^d\). The original problem posed by Monge (1781) is:
+
+\[
+\inf_{T_\#\mu = \nu} \int_{\mathcal{X}} c(x, T(x)) \, d\mu(x)
+\]
+
+where \(T : \mathcal{X} \rightarrow \mathcal{Y}\) is a measurable map that pushes forward \(\mu\) to \(\nu\) (i.e., \(T_\#\mu = \nu\)), and \(c(x, y)\) is a ground cost function.
+
+\textbf{Remark:} Monge’s problem may be ill-posed; it does not allow mass splitting and may lack a solution if, e.g., \(\mu\) is a Dirac delta and \(\nu\) is not.
+
+\subsection*{2. Kantorovich’s Relaxation}
+
+Kantorovich (1942) relaxed the problem by allowing probabilistic couplings \(\pi\) between \(\mu\) and \(\nu\). The new problem becomes:
+
+\[
+\inf_{\pi \in \Pi(\mu, \nu)} \int_{\mathcal{X} \times \mathcal{Y}} c(x, y) \, d\pi(x, y)
+\]
+
+where \(\Pi(\mu, \nu)\) is the set of all joint distributions with marginals \(\mu\) and \(\nu\).
+
+\subsection*{3. Dual Formulation and $c$-Transform}
+
+The Kantorovich dual problem is:
+
+\[
+\sup_{u, v} \left\{ \int_{\mathcal{X}} u(x) \, d\mu(x) + \int_{\mathcal{Y}} v(y) \, d\nu(y) \,:\, u(x) + v(y) \leq c(x, y) \right\}
+\]
+
+This is a linear program over functions \(u, v\). To work more effectively with this constraint, we define the \textbf{\(c\)-transform}:
+
+\subsection*{Definition: \(c\)-Transform}
+
+Given \(v : \mathcal{Y} \to \mathbb{R}\), the \(c\)-transform of \(v\) is:
+
+\[
+v^c(x) := \inf_{y \in \mathcal{Y}} \left\{ c(x, y) - v(y) \right\}
+\]
+
+Analogously, the \(c\)-transform of \(u\) is:
+
+\[
+u^c(y) := \inf_{x \in \mathcal{X}} \left\{ c(x, y) - u(x) \right\}
+\]
+
+Using the \(c\)-transform, we can rewrite the dual in terms of a single potential:
+
+\[
+\sup_v \left\{ \int_{\mathcal{X}} v^c(x) \, d\mu(x) + \int_{\mathcal{Y}} v(y) \, d\nu(y) \right\}
+\]
+
+This is equivalent to:
+
+\[
+\sup_u \left\{ \int_{\mathcal{X}} u(x) \, d\mu(x) + \int_{\mathcal{Y}} u^c(y) \, d\nu(y) \right\}
+\]
+
+\subsection*{4. Specialization to Quadratic Cost and Convex Potentials}
+
+Let us now consider the quadratic cost (the OT value is then $\frac{1}{2} W_2^2$):
+
+\[
+c(x, y) = \frac{1}{2} \|x - y\|^2
+\]
+
+\textbf{Why convex functions?} Brenier's theorem (1991) states: if \(\mu\) is absolutely continuous and \(c(x, y) = \frac{1}{2} \|x - y\|^2\), then the optimal transport map \(T^*\) is the gradient of a convex function:
+
+\[
+T^*(x) = \nabla \varphi(x)
+\]
+
+This justifies parameterizing the OT map as the gradient of a convex potential.
+
+\subsection*{5. Reformulating the Dual using Convex Potentials}
+
+Let us define:
+
+\[
+\psi(y) := \frac{1}{2} \|y\|^2 - v(y)
+\]
+
+Then we obtain:
+
+\[
+v(y) = \frac{1}{2} \|y\|^2 - \psi(y)
+\]
+
+and so:
+
+
+\[
+\begin{aligned}
+v^c(x) &= \inf_y \left\{ \frac{1}{2} \|x - y\|^2 - v(y) \right\} \\
+&= \inf_y \left\{ \frac{1}{2} \|x - y\|^2 - \left( \frac{1}{2} \|y\|^2 - \psi(y) \right) \right\}\\
+&= \inf_y \left\{ \frac{1}{2} \|x\|^2 - \langle x, y \rangle + \psi(y) \right\}\\
+&= \frac{1}{2} \|x\|^2 - \sup_y \left\{ \langle x, y \rangle - \psi(y) \right\}\\
+&= \frac{1}{2} \|x\|^2 - \psi^*(x)
+\end{aligned}
+\]
+
+Thus, the dual becomes:
+
+\[
+\frac{1}{2} W_2^2(\mu, \nu) = \int \frac{1}{2} \|x\|^2 \, d\mu(x) + \int \frac{1}{2} \|y\|^2 \, d\nu(y) - \inf_{\psi \text{ convex}} \left\{ \int \psi^*(x) \, d\mu(x) + \int \psi(y) \, d\nu(y) \right\}
+\]
+
+\subsection*{6. Final Form: Saddle Point Optimization}
+
+Using the Fenchel–Legendre duality:
+
+\[
+\psi^*(x) = \sup_{y \in \mathbb{R}^d} \left\{ \langle x, y \rangle - \psi(y) \right\}
+\]
+
+So:
+
+\[
+\int \psi^*(x) \, d\mu(x) = \sup_{T} \int \langle x, T(x) \rangle - \psi(T(x)) \, d\mu(x)
+\]
+
+The final expression is:
+
+\[
+\frac{1}{2} W_2^2(\mu, \nu) = \int \frac{1}{2} \|x\|^2 \, d\mu(x) + \int \frac{1}{2} \|y\|^2 \, d\nu(y)
+- \inf_{\psi \text{ convex}} \sup_T \left\{ \int \langle x, T(x) \rangle - \psi(T(x)) \, d\mu(x) + \int \psi(y) \, d\nu(y) \right\}
+\]
+
+\subsection*{7. Optimization Objective for Generative Modeling}
+
+Letting the constant terms be absorbed, we minimize the functional:
+
+\[
+\min_{\psi} \max_{T} \left\{ \int \langle x, T(x) \rangle - \psi(T(x)) \, d\mu(x) + \int \psi(y) \, d\nu(y) \right\}
+\]
+
+This is the saddle point problem solved in the ICLR 2022 paper, where both \(T\) and \(\psi\) are parameterized by neural networks.
+
+\end{document}
