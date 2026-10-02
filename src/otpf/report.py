@@ -11,7 +11,14 @@ import pandas as pd
 import plotly.graph_objects as go
 
 from otpf.figures import AMBER, INK, SLATE, color
-from otpf.summary import gradient_summary, kitagawa_summary, learning_summary, load_meta
+from otpf.summary import (
+    eps_pairs,
+    gradient_summary,
+    kitagawa_summary,
+    label,
+    learning_summary,
+    load_meta,
+)
 
 PLOTLY_CDN = "https://cdn.jsdelivr.net/npm/plotly.js-dist-min@4.1.1/plotly.min.js"
 # Ink is invisible on a dark background: exact values use a mid slate that reads in both themes.
@@ -24,8 +31,8 @@ def _layout(fig: go.Figure, **kwargs: object) -> go.Figure:
         "paper_bgcolor": "rgba(0,0,0,0)",
         "plot_bgcolor": "rgba(0,0,0,0)",
         "font": {"family": "Inter, system-ui, sans-serif", "color": SLATE, "size": 13},
-        "margin": {"l": 60, "r": 20, "t": 20, "b": 50},
-        "legend": {"orientation": "h", "y": -0.22},
+        "margin": {"l": 60, "r": 20, "t": 40, "b": 50},
+        "legend": {"orientation": "h", "x": 0, "y": 1.02, "yanchor": "bottom"},
         "hoverlabel": {"font": {"family": "Inter, system-ui, sans-serif"}},
     }
     fig.update_layout(**(settings | kwargs))
@@ -90,8 +97,8 @@ def _scatter_chart(results_dir: Path, score: list[float], n: int) -> go.Figure:
         )
     )
     _layout(fig, height=420)
-    fig.update_xaxes(title="d log p / d theta_1")
-    fig.update_yaxes(title="d log p / d theta_2")
+    fig.update_xaxes(title="∂ log p / ∂θ<sub>1</sub>")
+    fig.update_yaxes(title="∂ log p / ∂θ<sub>2</sub>")
     return fig
 
 
@@ -114,9 +121,9 @@ def _learning_chart(results_dir: Path, meta: dict) -> go.Figure:
         )
     )
     paths = pd.read_csv(results_dir / "learning_paths.csv")
-    names = {"kalman": "Kalman (exact)", "multinomial": "Multinomial", "soft": "Soft", "ot": "OT"}
-    for method, name in names.items():
+    for method in ["kalman", "multinomial", "soft", "ot"]:
         eps = meta["config"]["learn_eps"] if method == "ot" else None
+        name = label(method, eps)
         for i, (_, run) in enumerate(paths[paths["method"] == method].groupby("run")):
             fig.add_trace(
                 go.Scatter(
@@ -142,8 +149,8 @@ def _learning_chart(results_dir: Path, meta: dict) -> go.Figure:
         )
     )
     _layout(fig, height=460)
-    fig.update_xaxes(title="theta_1", range=[0, 1])
-    fig.update_yaxes(title="theta_2", range=[0, 1])
+    fig.update_xaxes(title="θ<sub>1</sub>", range=[0, 1])
+    fig.update_yaxes(title="θ<sub>2</sub>", range=[0, 1])
     return fig
 
 
@@ -199,6 +206,10 @@ def build_numbers(results_dir: Path) -> dict[str, float]:
     learn = learning_summary(results_dir).set_index("method")
     kit = kitagawa_summary(results_dir).set_index("label")
     meta = load_meta(results_dir)
+    pairs = eps_pairs(results_dir)
+    # The particle count at which the variance ordering across eps is clearest (nan if one eps).
+    sd_min_z = pairs.groupby("n_particles")["sd_diff_z"].min()
+    sd_n = int(sd_min_z.idxmax()) if len(sd_min_z) else float("nan")
     return {
         "n": int(n),
         "rmse_multinomial": at_n.loc["Multinomial", "score_rmse"],
@@ -206,18 +217,27 @@ def build_numbers(results_dir: Path) -> dict[str, float]:
         "rmse_ot": at_n.loc["OT, eps=0.5", "score_rmse"],
         "bias_multinomial": at_n.loc["Multinomial", "score_bias_norm"],
         "bias_ot": at_n.loc["OT, eps=0.5", "score_bias_norm"],
+        "bias_multinomial_se": at_n.loc["Multinomial", "score_bias_norm_se"],
+        "bias_ot_se": at_n.loc["OT, eps=0.5", "score_bias_norm_se"],
+        "bias_ot_p": at_n.loc["OT, eps=0.5", "score_bias_p"],
+        "eps_bias_max_z": pairs["bias_norm_diff_z"].abs().max(),
+        "eps_sd_n": sd_n,
+        "eps_sd_min_z": sd_min_z.max() if len(sd_min_z) else float("nan"),
         "score_norm": float(np.linalg.norm(meta["kalman_at_truth"]["score"])),
         "seconds_multinomial": at_n.loc["Multinomial", "seconds_per_run"],
         "seconds_ot": at_n.loc["OT, eps=0.5", "seconds_per_run"],
         "dist_multinomial": learn.loc["multinomial", "dist_to_mle"],
         "dist_soft": learn.loc["soft", "dist_to_mle"],
         "dist_ot": learn.loc["ot", "dist_to_mle"],
+        "dist_sd_multinomial": learn.loc["multinomial", "dist_to_mle_sd"],
+        "dist_sd_ot": learn.loc["ot", "dist_to_mle_sd"],
         "kit_multinomial": kit.loc["Multinomial", "rmse_truth"],
         "kit_ot": kit.loc["OT, eps=0.5", "rmse_truth"],
         "kit_diff": kit.loc["OT, eps=0.5", "diff_vs_multinomial"],
         "kit_ci": kit.loc["OT, eps=0.5", "diff_ci95"],
-        "kit_diff_eps1": kit.loc["OT, eps=1", "diff_vs_multinomial"],
-        "kit_ci_eps1": kit.loc["OT, eps=1", "diff_ci95"],
+        # eps = 1 is absent from the --quick configuration.
+        "kit_diff_eps1": kit["diff_vs_multinomial"].get("OT, eps=1", float("nan")),
+        "kit_ci_eps1": kit["diff_ci95"].get("OT, eps=1", float("nan")),
         "worst_learning_run": learn.drop(index="kalman")["dist_to_mle_max"].max(),
     }
 
@@ -255,18 +275,24 @@ def make_report(results_dir: Path, site_dir: Path) -> None:
     g = gradient_summary(results_dir)
     k = kitagawa_summary(results_dir)
     learn = learning_summary(results_dir)
+    learn["label"] = [label(m, cfg["learn_eps"] if m == "ot" else None) for m in learn["method"]]
     num = build_numbers(results_dir)
     n = num["n"]
-    at_n = g[g["n_particles"] == n]
+    at_n = g[g["n_particles"] == n].copy()
+    at_n["p_text"] = [f"{v:.2f}" if v >= 0.001 else "< 0.001" for v in at_n["score_bias_p"]]
 
     kpis = [
         (
-            f"{num['bias_multinomial'] / num['bias_ot']:.0f}x",
-            f"smaller score bias than multinomial resampling (N={n})",
-        ),
-        (
             f"{num['rmse_multinomial'] / num['rmse_ot']:.1f}x",
             f"lower score RMSE than multinomial resampling (N={n})",
+        ),
+        (
+            f"{num['bias_multinomial']:.1f} → {num['bias_ot']:.1f}",
+            (
+                f"score bias norm, multinomial to OT (SE {num['bias_multinomial_se']:.1f} and "
+                f"{num['bias_ot_se']:.1f}); OT's bias is not distinguishable from zero "
+                f"at {cfg['n_seeds']} seeds"
+            ),
         ),
         (
             f"{num['worst_learning_run']:.3f}",
@@ -312,11 +338,16 @@ true &theta; = {tuple(cfg["theta_true"])}.</li>
 {_chart("score-error", _score_error_chart(g))}
 <p class='takeaway'>At N = {n}, the score RMSE is {num["rmse_multinomial"]:.1f} for multinomial resampling,
 {num["rmse_soft"]:.1f} for soft resampling and {num["rmse_ot"]:.1f} for OT (&epsilon; = 0.5); the exact
-score has norm {num["score_norm"]:.1f}. Hover a point for the bias / spread split.</p>
+score has norm {num["score_norm"]:.1f}. Hover a point for the bias / spread split. Theory says &epsilon;
+trades bias for variance. The variance half is visible, most clearly at N = {num["eps_sd_n"]}, where each step down in &epsilon;
+raises the spread by at least {num["eps_sd_min_z"]:.1f} standard errors (paired bootstrap). The bias half is not
+resolved: paired differences in bias between &epsilon; values stay within {num["eps_bias_max_z"]:.1f} SE at every N
+(<a href='https://github.com/Pchambet/Particle-Filter-Optimal-Transport/blob/main/results/summary_eps_pairs.csv'>table</a>).</p>
 {_chart("score-scatter", _scatter_chart(results_dir, meta["kalman_at_truth"]["score"], n))}
 <p class='takeaway'>Each dot is one seed. The multinomial cloud is centred away from the exact score
-(bias {num["bias_multinomial"]:.1f}); the OT cloud is centred near it (bias {num["bias_ot"]:.1f}).</p>
-{_table(at_n, {"label": "Method", "loglik_bias": "log-lik bias", "loglik_sd": "log-lik sd", "score_bias_norm": "score bias", "score_sd": "score sd", "score_rmse": "score RMSE", "seconds_per_run": "s / run"})}
+(bias {num["bias_multinomial"]:.1f} &plusmn; {num["bias_multinomial_se"]:.1f}); the OT cloud is centred near it
+(bias {num["bias_ot"]:.1f} &plusmn; {num["bias_ot_se"]:.1f}; a test of zero bias gives p = {num["bias_ot_p"]:.2f}).</p>
+{_table(at_n, {"label": "Method", "loglik_bias": "log-lik bias", "loglik_sd": "log-lik sd", "score_bias_norm": "score bias", "score_bias_norm_se": "± SE", "p_text": "p (bias = 0)", "score_sd": "score sd", "score_rmse": "score RMSE", "seconds_per_run": "s / run"})}
 
 <h2>2. Learning the parameters</h2>
 {_chart("learning", _learning_chart(results_dir, meta))}
@@ -325,19 +356,22 @@ score has norm {num["score_norm"]:.1f}. Hover a point for the bias / spread spli
 Mean distance of the final iterate (average of the last 20) to the exact MLE: multinomial
 {num["dist_multinomial"]:.3f}, soft {num["dist_soft"]:.3f}, OT {num["dist_ot"]:.3f}. On this model the
 gradient bias measured at the true parameter does not translate into worse parameters: every run of every
-scheme ends within {num["worst_learning_run"]:.3f} of the MLE. Better gradients did not buy
+scheme ends within {num["worst_learning_run"]:.3f} of the MLE. OT ended slightly farther, by a gap of the order of
+the run-to-run spread (standard deviation of the distance across runs: OT {num["dist_sd_ot"]:.3f}, multinomial
+{num["dist_sd_multinomial"]:.3f}). Better gradients did not buy
 better estimates here; they matter where the biased gradient points somewhere else, which this benchmark does
 not show.</p>
-{_table(learn, {"method": "Gradient source", "theta_1": "theta_1", "theta_2": "theta_2", "dist_to_mle": "mean dist. to MLE", "dist_to_mle_max": "worst run"}, digits=3)}
+{_table(learn, {"label": "Gradient source", "theta_1": "θ₁", "theta_2": "θ₂", "dist_to_mle": "mean dist. to MLE", "dist_to_mle_max": "worst run"}, digits=3)}
 
 <h2>3. A harder, nonlinear model</h2>
 {_chart("kitagawa", _kitagawa_chart(k))}
 <p class='takeaway'>The univariate growth model of the original student project (y = x<sup>2</sup>/20 + noise,
 bimodal posterior), {cfg["kitagawa_sequences"]} sequences of length {cfg["kitagawa_T"]}, N = {cfg["kitagawa_particles"]}.
 Paired change in RMSE against multinomial resampling: OT (&epsilon; = 0.5) {num["kit_diff"]:+.2f} &plusmn; {num["kit_ci"]:.2f},
-not significant; OT (&epsilon; = 1) {num["kit_diff_eps1"]:+.2f} &plusmn; {num["kit_ci_eps1"]:.2f}, worse, consistent with a large &epsilon;
+not significant; OT (&epsilon; = 1) {num["kit_diff_eps1"]:+.2f} &plusmn; {num["kit_ci_eps1"]:.2f}, borderline worse
+(the 95% CI just excludes 0, with no correction for the four comparisons), consistent with a large &epsilon;
 averaging particles across the two modes. The 2024 claim that OT resampling tracks more accurately came from a
-single unseeded run and does not hold.</p>
+single unseeded run and is not supported.</p>
 
 <h2>Limitations</h2>
 <ul>
