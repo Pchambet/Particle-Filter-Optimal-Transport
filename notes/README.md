@@ -10,4 +10,4 @@ Written for a workshop of the Computational Systems Biology Laboratory at NAIST
 
 Revised in 2026: typos, and a corrected statement of the quadratic-cost dual.
 
-Build: `latexmk -pdf <name>.tex` (needs `tcolorbox` with its `skins` library, `physics`, `mathtools`, `microtype`).
+Build: `latexmk -pdf <name>.tex` (needs `tcolorbox` with its `most` libraries, `physics`, `mathtools`, `microtype`).
