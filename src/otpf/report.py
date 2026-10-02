@@ -22,8 +22,10 @@ from otpf.summary import (
 )
 
 PLOTLY_CDN = "https://cdn.jsdelivr.net/npm/plotly.js-dist-min@4.1.1/plotly.min.js"
-# Ink is invisible on a dark background: exact values use a mid slate that reads in both themes.
+# Ink is invisible on a dark background: exact markers use a mid slate that reads in both themes,
+# and the exact learning path is drawn in ink, which the page swaps for DARK_INK in dark mode.
 REF = "#94a3b8"
+DARK_INK = "#e2e8f0"
 AXIS = {"gridcolor": "rgba(100,116,139,0.2)", "zeroline": False, "linecolor": SLATE}
 
 
@@ -63,7 +65,17 @@ def _score_error_chart(summary: pd.DataFrame) -> go.Figure:
     fig.update_xaxes(
         type="log", title="particles N", tickvals=sorted(summary["n_particles"].unique())
     )
-    fig.update_yaxes(type="log", title="RMSE of the score")
+    # Same ticks as the static hero; the range reaches down to 10 so the N = 100 OT points
+    # (about 14) sit above a labelled tick.
+    ticks = [10, 20, 40, 80]
+    low = min(ticks[0], summary["score_rmse"].min() * 0.8)
+    high = summary["score_rmse"].max() * 1.15
+    fig.update_yaxes(
+        type="log",
+        title="RMSE of the score",
+        tickvals=ticks,
+        range=[math.log10(low), math.log10(high)],
+    )
     return fig
 
 
@@ -122,7 +134,9 @@ def _learning_chart(results_dir: Path, meta: dict) -> go.Figure:
         )
     )
     paths = pd.read_csv(results_dir / "learning_paths.csv")
-    for method in ["kalman", "multinomial", "soft", "ot"]:
+    # The exact path is drawn last, on top of the particle paths it would otherwise hide,
+    # and listed first in the legend.
+    for rank, method in enumerate(["multinomial", "soft", "ot", "kalman"]):
         eps = meta["config"]["learn_eps"] if method == "ot" else None
         name = label(method, eps)
         for i, (_, run) in enumerate(paths[paths["method"] == method].groupby("run")):
@@ -133,8 +147,9 @@ def _learning_chart(results_dir: Path, meta: dict) -> go.Figure:
                     mode="lines",
                     name=name,
                     legendgroup=method,
+                    legendrank=0 if method == "kalman" else rank + 1,
                     showlegend=i == 0,
-                    line={"color": REF if method == "kalman" else color(method, eps), "width": 2},
+                    line={"color": color(method, eps), "width": 2},
                     hovertemplate="step %{text}<br>(%{x:.3f}, %{y:.3f})<extra>" + name + "</extra>",
                     text=run["step"],
                 )
@@ -151,7 +166,8 @@ def _learning_chart(results_dir: Path, meta: dict) -> go.Figure:
     )
     _layout(fig, height=460)
     fig.update_xaxes(title="θ<sub>1</sub>", range=[0, 1])
-    fig.update_yaxes(title="θ<sub>2</sub>", range=[0, 1])
+    # A little headroom above 1: soft-resampling runs overshoot it slightly.
+    fig.update_yaxes(title="θ<sub>2</sub>", range=[0, 1.05])
     return fig
 
 
@@ -195,6 +211,9 @@ def _chart(div_id: str, fig: go.Figure) -> str:
     return (
         f"<div id='{div_id}' class='chart'></div>"
         f"<script>(function(){{const f={spec};"
+        "if(matchMedia('(prefers-color-scheme: dark)').matches)for(const t of f.data){"
+        f"if(t.line&&t.line.color==='{INK}')t.line.color='{DARK_INK}';"
+        f"if(t.marker&&t.marker.line&&t.marker.line.color==='{INK}')t.marker.line.color='{DARK_INK}';}}"
         f"Plotly.newPlot('{div_id}',f.data,f.layout,{{responsive:true,displaylogo:false}});}})();</script>"
     )
 
