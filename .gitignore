@@ -34,3 +34,6 @@ Thumbs.db
 *.synctex.gz
 *.out
 *.toc
+
+# Smoke runs (`otpf <command> --quick`)
+quick/
