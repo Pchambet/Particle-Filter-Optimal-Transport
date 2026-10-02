@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 
 from otpf.summary import (
+    eps_pairs,
     gradient_summary,
     kitagawa_summary,
     learning_summary,
@@ -140,7 +141,7 @@ def hero(results_dir: Path, path: Path) -> None:
         "ot": "OT, eps=0.5",
         "kalman": "Exact score",
     }
-    ax2.text(0.97, 0.97, "distance of the learned theta\nto the exact MLE (mean of runs)",
+    ax2.text(0.97, 0.97, "distance of the learned theta to the\nexact MLE (last 20 iterates, mean of runs)",
              transform=ax2.transAxes, fontsize=9, color=SLATE, va="top", ha="right")  # fmt: skip
     for i, method in enumerate(["multinomial", "soft", "ot", "kalman"]):
         if method in finals.index:
@@ -154,7 +155,7 @@ def hero(results_dir: Path, path: Path) -> None:
     ax2.set_ylim(0, 1)
     ax2.set_xlabel(r"$\theta_1$ (transition coefficient, dim 1)")
     ax2.set_ylabel(r"$\theta_2$ (transition coefficient, dim 2)")
-    ax2.set_title(rf"Yet every run lands within {np.ceil(worst * 100) / 100:.2f} of the MLE")
+    ax2.set_title(f"Yet every run lands within {worst:.3f} of the MLE")
     _save(fig, path)
 
 
@@ -195,21 +196,28 @@ def eps_tradeoff(results_dir: Path, path: Path) -> None:
     s = summary[summary["n_particles"] == n].reset_index(drop=True)
     fig, ax = plt.subplots(figsize=(7.2, 3.8))
     y = np.arange(len(s))
+    bar = {"height": 0.34, "error_kw": {"ecolor": INK, "elinewidth": 1, "capsize": 2}}
     for i, row in s.iterrows():
         c = color(row["method"], row["eps"])
-        ax.barh(i - 0.18, row["score_bias_norm"], height=0.34, color=c)
-        ax.barh(i + 0.18, row["score_sd"], height=0.34, color=c, alpha=0.4)
-        ax.text(row["score_bias_norm"], i - 0.18, f" bias {row['score_bias_norm']:.1f}",
-                va="center", fontsize=8, color=INK)  # fmt: skip
-        ax.text(row["score_sd"], i + 0.18, f" sd {row['score_sd']:.1f}", va="center",
-                fontsize=8, color=SLATE)  # fmt: skip
+        bias, bias_se = row["score_bias_norm"], row["score_bias_norm_se"]
+        sd, sd_se = row["score_sd"], row["score_sd_se"]
+        ax.barh(i - 0.18, bias, xerr=bias_se, color=c, **bar)
+        ax.barh(i + 0.18, sd, xerr=sd_se, color=c, alpha=0.4, **bar)
+        ax.text(bias + bias_se, i - 0.18, f" bias {bias:.1f} ± {bias_se:.1f}", va="center",
+                fontsize=8, color=INK)  # fmt: skip
+        ax.text(sd + sd_se, i + 0.18, f" sd {sd:.1f} ± {sd_se:.1f}", va="center", fontsize=8,
+                color=SLATE)  # fmt: skip
     ax.set_yticks(y, s["label"])
     ax.invert_yaxis()
-    ax.set_xlabel("norm of the score bias (solid) and standard deviation (light)")
-    ax.set_title("Smaller eps: less bias, more variance")
-    ax.text(0.0, -0.2, f"Score estimate at the true parameter, N={n}, {int(s['seeds'].min())} seeds.",
-            transform=ax.transAxes, fontsize=9, color=SLATE)  # fmt: skip
-    ax.set_xlim(0, max(s["score_bias_norm"].max(), s["score_sd"].max()) * 1.3)
+    ax.set_xlabel("norm of the score bias (solid) and standard deviation (light), ± 1 SE")
+    ax.set_title("Every OT eps cuts the bias to a few units; eps differences are within noise")
+    ax.text(0.0, -0.2, f"Score estimate at the true parameter, N={n}, {int(s['seeds'].min())} seeds;"
+            " SE bootstrapped over seeds.", transform=ax.transAxes, fontsize=9, color=SLATE)  # fmt: skip
+    top = (
+        s[["score_bias_norm", "score_sd"]].to_numpy()
+        + s[["score_bias_norm_se", "score_sd_se"]].to_numpy()
+    ).max()
+    ax.set_xlim(0, top * 1.35)
     _save(fig, path)
 
 
@@ -234,7 +242,7 @@ def kitagawa(results_dir: Path, path: Path) -> None:
     ax.set_xlim(None, s["diff_vs_multinomial"].max() + s["diff_ci95"].max() + 0.45)
     n_seq = int(s["sequences"].min())
     ax.set_xlabel(f"change in tracking RMSE vs multinomial (paired, 95% CI, {n_seq} sequences)")
-    ax.set_title("Nonlinear model: no significant gain from OT; eps=1 hurts")
+    ax.set_title("Nonlinear model: no significant gain from OT; eps=1 borderline worse")
     _save(fig, path)
 
 
@@ -247,3 +255,4 @@ def make_figures(results_dir: Path, figures_dir: Path) -> None:
     gradient_summary(results_dir).to_csv(results_dir / "summary_gradients.csv", index=False)
     learning_summary(results_dir).to_csv(results_dir / "summary_learning.csv", index=False)
     kitagawa_summary(results_dir).to_csv(results_dir / "summary_kitagawa.csv", index=False)
+    eps_pairs(results_dir).to_csv(results_dir / "summary_eps_pairs.csv", index=False)
