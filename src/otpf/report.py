@@ -163,7 +163,7 @@ def _kitagawa_chart(summary: pd.DataFrame) -> go.Figure:
         )
     )
     fig.add_vline(x=0, line={"color": AMBER, "width": 2})
-    _layout(fig, height=320, margin={"l": 230, "r": 20, "t": 20, "b": 50})
+    _layout(fig, height=320, margin={"l": 10, "r": 20, "t": 20, "b": 50})
     fig.update_yaxes(autorange="reversed")
     fig.update_xaxes(title="change in RMSE vs multinomial (paired, 95% CI)")
     return fig

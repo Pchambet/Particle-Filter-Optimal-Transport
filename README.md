@@ -30,7 +30,7 @@ the exact Kalman score over 100 seeds.
 
 ## Why it matters
 
-State-space models are how operations data is usually modelled: a hidden state (demand, wear,
+State-space models are a standard way to model operations data: a hidden state (demand, wear,
 position, congestion) observed through noise. Particle filters estimate their likelihood when no
 closed form exists, which is the normal case. Fitting the parameters by gradient descent, or
 training a neural component inside the filter, needs the gradient of that estimate. The
