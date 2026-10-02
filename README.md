@@ -13,20 +13,25 @@ the exact Kalman score over 100 seeds.
 
 ## TL;DR
 
-- **The textbook gradient is wrong by more than its own size.** At N = 100 particles, over 100
-  seeds, the score from a filter with multinomial resampling has a bias of norm 24.8, while the
-  exact score has norm 16.8. Soft resampling (alpha = 0.5) does not fix it (bias 20.3, RMSE 43.3).
-- **OT resampling cuts the bias 10x and the RMSE 2.6x**: bias 2.4, RMSE 14.3 vs 37.9 for
-  multinomial (eps = 0.5). eps trades bias for variance: bias 2.0 / 2.4 / 3.1 and spread
-  15.5 / 14.2 / 13.8 for eps = 0.25 / 0.5 / 1.
+- **The textbook gradient's bias is larger than the gradient itself.** At N = 100 particles, over
+  100 seeds, the score from a filter with multinomial resampling has a bias of norm 24.8 ± 2.7
+  (± 1 SE), against an exact score of norm 16.8. Soft resampling (alpha = 0.5) does not fix it
+  (bias 20.3 ± 3.6, RMSE 43.3).
+- **OT resampling cuts the score RMSE 2.6x** (14.3 vs 37.9 for multinomial, eps = 0.5). Its bias
+  drops from 24.8 ± 2.7 to 2.4 ± 1.2, not distinguishable from zero at 100 seeds (p = 0.14).
+  Theory predicts that eps trades bias for variance; at 100 seeds the bias differences between
+  eps values are within noise (all within 1.6 SE), and only the variance side shows clearly
+  (at N = 50).
 - **Better gradients did not buy better parameters here.** Adam from a distant start lands within
-  0.053 of the exact MLE in every run of every scheme (mean distance: multinomial 0.025, soft
-  0.023, OT 0.040).
+  0.053 of the exact MLE in every run of every scheme (distance of the average of the last 20
+  iterates; mean over runs: multinomial 0.025, soft 0.023, OT 0.040). OT ended slightly farther,
+  a gap of the order of the run-to-run spread (sd 0.014) with 5 runs.
 - **It is not free:** at N = 100 an OT filter run took 1.2 s against 0.009 s for multinomial,
   about 130x (CPU, indicative).
-- **The 2024 claim does not survive a re-test.** On the bimodal nonlinear model, OT resampling
-  (eps <= 0.5) tracks no better than multinomial (RMSE change -0.12 +/- 0.24, 100 sequences), and
-  eps = 1 is worse (+0.35 +/- 0.34).
+- **The original 2024 project's claim that OT resampling tracks more accurately is not
+  supported.** On its bimodal nonlinear model, OT resampling (eps <= 0.5) tracks no better than
+  multinomial (RMSE change -0.12 ± 0.24, 95% CI, 100 sequences); eps = 1 is borderline worse
+  (+0.35 ± 0.34; the CI just excludes 0, no multiple-comparison correction).
 
 ## Why it matters
 
@@ -35,7 +40,7 @@ position, congestion) observed through noise. Particle filters estimate their li
 closed form exists, which is the normal case. Fitting the parameters by gradient descent, or
 training a neural component inside the filter, needs the gradient of that estimate. The
 resampling step draws discrete ancestor indices, so automatic differentiation silently drops part
-of the gradient and returns a biased answer without any warning. This repository measures how
+of the gradient: the answer is biased. This repository measures how
 large that bias is, and what an optimal-transport resampling step buys, on a model where the exact
 answer is known.
 
@@ -67,26 +72,34 @@ cloud is centred near it.
 
 ![Score estimates per seed around the exact score](docs/figures/score_scatter.png)
 
-**The role of eps.** Smaller eps means a sharper transport plan: less bias, more variance. Every OT
+**The role of eps.** Theory says a smaller eps gives a sharper transport plan: less bias, more
+variance. Only the variance half is resolved by 100 seeds. At N = 50, each step down in eps raises
+the spread by at least 4.6 standard errors (24.9 to 34.7 from eps = 0.5 to 0.25); at N = 100 the
+differences shrink below 2 SE. The bias differences between eps values point the expected way but
+stay within 1.6 SE at every N (paired bootstrap over seeds,
+[`results/summary_eps_pairs.csv`](results/summary_eps_pairs.csv)). What is clear: every OT
 variant has a lower bias and a lower spread than both baselines at N = 100.
 
 ![Bias and spread of the score per method](docs/figures/eps_tradeoff.png)
 
-| N = 100, 100 seeds | log-lik bias | log-lik sd | score bias | score sd | score RMSE | s / run |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Multinomial | -5.96 | 3.31 | 24.80 | 28.87 | 37.95 | 0.009 |
-| Soft (alpha = 0.5) | -9.62 | 5.07 | 20.31 | 38.38 | 43.26 | 0.012 |
-| OT, eps = 0.25 | -5.53 | 3.73 | 1.99 | 15.53 | 15.58 | 3.34 |
-| OT, eps = 0.5 | -5.64 | 3.77 | 2.39 | 14.21 | 14.34 | 1.20 |
-| OT, eps = 1 | -5.79 | 3.82 | 3.13 | 13.78 | 14.06 | 0.64 |
+| N = 100, 100 seeds | log-lik bias | log-lik sd | score bias ± SE | p (bias = 0) | score sd | score RMSE | s / run |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Multinomial | -5.96 | 3.31 | 24.80 ± 2.73 | < 0.001 | 28.87 | 37.95 | 0.009 |
+| Soft (alpha = 0.5) | -9.62 | 5.07 | 20.31 ± 3.63 | < 0.001 | 38.38 | 43.26 | 0.012 |
+| OT, eps = 0.25 | -5.53 | 3.73 | 1.99 ± 1.18 | 0.33 | 15.53 | 15.58 | 3.34 |
+| OT, eps = 0.5 | -5.64 | 3.77 | 2.39 ± 1.17 | 0.14 | 14.21 | 14.34 | 1.20 |
+| OT, eps = 1 | -5.79 | 3.82 | 3.13 ± 1.20 | 0.02 | 13.78 | 14.06 | 0.64 |
+
+The SE of the bias norm is bootstrapped over seeds; the p-value is a Wald test that the bias
+vector is zero.
 
 The log-likelihood estimates themselves are almost unaffected by the resampling scheme (soft
 resampling excepted): the difference is in the gradient. Full table for N = 25, 50, 100 in
 [`results/summary_gradients.csv`](results/summary_gradients.csv).
 
 **Learning** (right panel of the hero figure). Adam, 150 steps, learning rate 0.02, N = 50,
-5 runs per scheme. All three schemes reach the neighbourhood of the MLE; the exact-score path is
-the reference ([`results/summary_learning.csv`](results/summary_learning.csv)).
+5 runs per scheme; the distance to the MLE is that of the average of the last 20 iterates. All
+three schemes reach the neighbourhood of the MLE; the exact-score path is the reference ([`results/summary_learning.csv`](results/summary_learning.csv)).
 
 **Nonlinear model.** The growth model of the original project (`y = x^2 / 20 + noise`, bimodal
 posterior), 100 sequences of length 50, N = 100, paired against multinomial resampling. A
@@ -101,7 +114,7 @@ make setup     # uv sync --locked (Python 3.12, PyTorch CPU)
 make data      # simulate the observation sequences (seeded) into data/simulated/
 make run       # the four experiments -> results/*.csv, then docs/figures/*.png
 make report    # site/index.html, the interactive report
-make test      # 22 tests, ~40 s
+make test      # 27 tests, ~40 s
 ```
 
 `make run` took about 50 minutes on a 10-core laptop shared with other jobs (3 torch threads); the
@@ -120,13 +133,18 @@ src/otpf/
   learn.py        exact MLE (L-BFGS) and Adam on any gradient source
   experiments.py  the four experiments
   figures.py, report.py, summary.py, cli.py
-tests/            Sinkhorn, Kalman and filter tests (finite differences, closed forms)
+tests/            Sinkhorn, Kalman, filter, statistics and CLI tests (finite differences, closed forms)
 results/          experiment outputs (CSV) used by the figures and this README
 docs/figures/     static figures
+site/             interactive report (make report)
 notes/            optimal transport notes, NAIST workshop (May 2025)
 docs/cassiopee-2024/  the original student project reports (French)
 legacy/           the original 2024 code, kept for the record (see legacy/README.md)
+Makefile          setup, data, run, figures, report, test, lint
 ```
+
+`otpf <command> --quick` runs a seconds-long smoke version of any step and writes under `quick/`
+(gitignored), so it never overwrites the committed results.
 
 ## Methodology notes and limitations
 
@@ -142,11 +160,11 @@ legacy/           the original 2024 code, kept for the record (see legacy/README
   shrinks. Timings were taken on a laptop shared with other jobs; read them as orders of magnitude.
 - **Gradients through Sinkhorn** use the implicit function theorem at the fixed point, exact up to
   the solver tolerance (L1 marginal error 1e-6), and verified against finite differences in the
-  tests. Truncated unrolling was tried during development and set aside (5 replayed iterations
-  gave a 40% gradient error at eps = 0.3).
+  tests. Truncated unrolling (replaying a few iterations on the tape) was tried during
+  development and set aside in favour of the exact implicit gradient.
 - **Few learning repeats** (5 per scheme) and a fixed learning rate: distances to the MLE are
   indicative, not a ranking.
-- On the nonlinear model, the eps = 1 degradation is consistent with the plan averaging particles
+- On the nonlinear model, the borderline eps = 1 degradation is consistent with the plan averaging particles
   across the two modes of the posterior; that mechanism was not tested separately.
 
 ## Background

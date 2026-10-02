@@ -5,12 +5,11 @@ of Sinkhorn (`u = a / Kv`) underflows; every update is written with `logsumexp`
 on the dual potentials instead.
 
 Gradients. Unrolling hundreds of iterations at every filter step would keep an
-N x N tensor per iteration on the autograd tape, and truncating the unroll to
-a few iterations is a poor approximation (during development, 5 replayed
-iterations gave a 40% gradient error at eps = 0.3). We instead run the
-iterations to convergence without recording, and differentiate the fixed point
-with the implicit function theorem: one (N + M - 1) linear solve per plan,
-memory O(N M), exact up to the solver tolerance.
+N x N tensor per iteration on the autograd tape; truncating the unroll to a
+few iterations was tried during development and set aside as inaccurate. We
+instead run the iterations to convergence without recording, and differentiate
+the fixed point with the implicit function theorem: one (N + M - 1) linear
+solve per plan, memory O(N M), exact up to the solver tolerance.
 """
 
 from __future__ import annotations
