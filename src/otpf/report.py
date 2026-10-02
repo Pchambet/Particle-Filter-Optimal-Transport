@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import json
+import math
 from pathlib import Path
 
 import numpy as np
@@ -210,6 +211,10 @@ def build_numbers(results_dir: Path) -> dict[str, float]:
     # The particle count at which the variance ordering across eps is clearest (nan if one eps).
     sd_min_z = pairs.groupby("n_particles")["sd_diff_z"].min()
     sd_n = int(sd_min_z.idxmax()) if len(sd_min_z) else float("nan")
+    # The score bias at the particle count and eps used for learning.
+    cfg = meta["config"]
+    at_learn = g[g["n_particles"] == cfg["learn_particles"]].set_index("label")
+    learn_ot = f"OT, eps={cfg['learn_eps']:g}"
     return {
         "n": int(n),
         "rmse_multinomial": at_n.loc["Multinomial", "score_rmse"],
@@ -239,6 +244,9 @@ def build_numbers(results_dir: Path) -> dict[str, float]:
         "kit_diff_eps1": kit["diff_vs_multinomial"].get("OT, eps=1", float("nan")),
         "kit_ci_eps1": kit["diff_ci95"].get("OT, eps=1", float("nan")),
         "worst_learning_run": learn.drop(index="kalman")["dist_to_mle_max"].max(),
+        "learn_bias_multinomial": at_learn["score_bias_norm"].get("Multinomial", float("nan")),
+        "learn_bias_ot": at_learn["score_bias_norm"].get(learn_ot, float("nan")),
+        "learn_bias_ot_p": at_learn["score_bias_p"].get(learn_ot, float("nan")),
     }
 
 
@@ -303,6 +311,10 @@ def make_report(results_dir: Path, site_dir: Path) -> None:
             "slower per filter run than multinomial (CPU, indicative)",
         ),
     ]
+    eps_set = "{" + ", ".join(f"{e:g}" for e in cfg["eps_grid"]) + "}"
+    mle = ", ".join(f"{v:.2f}" for v in meta["kalman_mle"])
+    # Round the z-score down so "at least" stays true.
+    eps_sd_min_z = math.floor(num["eps_sd_min_z"] * 10) / 10
     kpi_html = "".join(
         f"<div class='kpi'><b>{html.escape(v)}</b><span>{html.escape(t)}</span></div>"
         for v, t in kpis
@@ -311,7 +323,7 @@ def make_report(results_dir: Path, site_dir: Path) -> None:
     body = f"""
 <h1>Differentiable particle filtering with optimal transport</h1>
 <p class='lede'>Can a particle filter give gradients good enough to learn a model's parameters?
-Benchmarked against the exact Kalman score on a linear-Gaussian model, over {cfg["n_seeds"]} seeds.</p>
+Benchmarked against the exact Kalman score on a linear-Gaussian model, over {cfg["n_seeds"]} filter seeds.</p>
 <div class='kpis'>{kpi_html}</div>
 
 <h2>The question</h2>
@@ -327,9 +339,12 @@ model where the exact answer is known.</p>
 <li>Model: x<sub>t</sub> = diag(&theta;) x<sub>t-1</sub> + N(0, {cfg["sigma_x"]:g}<sup>2</sup> I),
 y<sub>t</sub> = x<sub>t</sub> + N(0, {cfg["sigma_y"]:g}<sup>2</sup> I), in 2-D, T = {cfg["T"]} observations,
 true &theta; = {tuple(cfg["theta_true"])}.</li>
+<li>Data: one simulated observation sequence (seed {cfg["data_seed"]}). The {cfg["n_seeds"]} seeds are
+particle-filter seeds on that sequence, so every linear-Gaussian result is conditional on it. Its exact MLE is
+({mle}); learning is measured against the MLE, not against the true &theta;.</li>
 <li>Ground truth: the Kalman filter gives the exact log-likelihood; autograd through it gives the exact score.</li>
 <li>Resampling at every step: multinomial (gradient ignores resampling), soft resampling
-(Karkus et al., 2018, &alpha; = {cfg["soft_alpha"]}), and OT resampling with &epsilon; in {list(cfg["eps_grid"])}
+(Karkus et al., 2018, &alpha; = {cfg["soft_alpha"]}), and OT resampling with &epsilon; &isin; {eps_set}
 (squared distance between particles standardised per dimension).</li>
 <li>OT plans by log-domain Sinkhorn; gradients by implicit differentiation at the fixed point, checked against finite differences.</li>
 </ul>
@@ -340,7 +355,7 @@ true &theta; = {tuple(cfg["theta_true"])}.</li>
 {num["rmse_soft"]:.1f} for soft resampling and {num["rmse_ot"]:.1f} for OT (&epsilon; = 0.5); the exact
 score has norm {num["score_norm"]:.1f}. Hover a point for the bias / spread split. Theory says &epsilon;
 trades bias for variance. The variance half is visible, most clearly at N = {num["eps_sd_n"]}, where each step down in &epsilon;
-raises the spread by at least {num["eps_sd_min_z"]:.1f} standard errors (paired bootstrap). The bias half is not
+raises the spread by at least {eps_sd_min_z:.1f} standard errors (paired bootstrap). The bias half is not
 resolved: paired differences in bias between &epsilon; values stay within {num["eps_bias_max_z"]:.1f} SE at every N
 (<a href='https://github.com/Pchambet/Particle-Filter-Optimal-Transport/blob/main/results/summary_eps_pairs.csv'>table</a>).</p>
 {_chart("score-scatter", _scatter_chart(results_dir, meta["kalman_at_truth"]["score"], n))}
@@ -353,6 +368,8 @@ resolved: paired differences in bias between &epsilon; values stay within {num["
 {_chart("learning", _learning_chart(results_dir, meta))}
 <p class='takeaway'>Adam ({cfg["learn_steps"]} steps, learning rate {cfg["learn_lr"]}, N = {cfg["learn_particles"]},
 {cfg["learn_runs"]} runs each) from &theta; = {tuple(cfg["theta_init"])}. Contours: exact log-likelihood.
+At N = {cfg["learn_particles"]} the OT score bias is still significant ({num["learn_bias_ot"]:.1f}, p = {num["learn_bias_ot_p"]:.4f})
+but about {num["learn_bias_multinomial"] / num["learn_bias_ot"]:.0f}x smaller than multinomial's ({num["learn_bias_multinomial"]:.1f}).
 Mean distance of the final iterate (average of the last 20) to the exact MLE: multinomial
 {num["dist_multinomial"]:.3f}, soft {num["dist_soft"]:.3f}, OT {num["dist_ot"]:.3f}. On this model the
 gradient bias measured at the true parameter does not translate into worse parameters: every run of every
@@ -365,8 +382,8 @@ not show.</p>
 
 <h2>3. A harder, nonlinear model</h2>
 {_chart("kitagawa", _kitagawa_chart(k))}
-<p class='takeaway'>The univariate growth model of the original student project (y = x<sup>2</sup>/20 + noise,
-bimodal posterior), {cfg["kitagawa_sequences"]} sequences of length {cfg["kitagawa_T"]}, N = {cfg["kitagawa_particles"]}.
+<p class='takeaway'>A corrected version of the univariate growth model of the original student project
+(y = x<sup>2</sup>/20 + noise, bimodal posterior; standard noise variances, a true barycentric OT step), {cfg["kitagawa_sequences"]} sequences of length {cfg["kitagawa_T"]}, N = {cfg["kitagawa_particles"]}.
 Paired change in RMSE against multinomial resampling: OT (&epsilon; = 0.5) {num["kit_diff"]:+.2f} &plusmn; {num["kit_ci"]:.2f},
 not significant; OT (&epsilon; = 1) {num["kit_diff_eps1"]:+.2f} &plusmn; {num["kit_ci_eps1"]:.2f}, borderline worse
 (the 95% CI just excludes 0, with no correction for the four comparisons), consistent with a large &epsilon;
@@ -376,6 +393,7 @@ single unseeded run and is not supported.</p>
 <h2>Limitations</h2>
 <ul>
 <li>One small model (2 parameters, d = 2) where the Kalman filter is exact; the point is a ground truth, not scale.</li>
+<li>One observation sequence (T = {cfg["T"]}): the bias and RMSE are over filter seeds, conditional on that sequence.</li>
 <li>OT resampling costs O(N<sup>2</sup>) per step and many Sinkhorn iterations at small &epsilon;; here it is
 about {num["seconds_ot"] / num["seconds_multinomial"]:.0f}x slower than multinomial resampling at N = {n} (CPU, shared machine, indicative only).</li>
 <li>The OT estimator is biased for any fixed &epsilon; &gt; 0: the barycentric map shrinks the particle cloud.</li>

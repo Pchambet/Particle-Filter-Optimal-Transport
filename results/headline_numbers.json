@@ -25,5 +25,8 @@
   "kit_ci": 0.2449877418615778,
   "kit_diff_eps1": 0.35192677749510315,
   "kit_ci_eps1": 0.3385461859279462,
-  "worst_learning_run": 0.05258293395486761
+  "worst_learning_run": 0.05258293395486761,
+  "learn_bias_multinomial": 29.043968110904796,
+  "learn_bias_ot": 5.8253439322233636,
+  "learn_bias_ot_p": 0.00020859061523169863
 }
