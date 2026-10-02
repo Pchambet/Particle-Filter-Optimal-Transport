@@ -14,7 +14,7 @@ README claimed:
 | `code/optimal_transport.py` | The Sinkhorn solver is `ot.sinkhorn` (POT, NumPy): nothing in the pipeline is differentiated. |
 | `code/auto_differentiation.py` | `transition()` receives `Q` but uses a noise array pre-drawn with the initial `Q`, so the gradient with respect to `Q` is identically zero. |
 | `code/auto_differentiation.py` | The cost function bypasses resampling entirely and the demo uses systematic resampling, so it says nothing about differentiating through OT resampling. |
-| `images/cmse_comparison.png` | The "OT filter is more accurate" curve comes from a single unseeded run of 30 steps. Over many seeds the two filters are statistically indistinguishable on this model (see the main README, experiment 4). |
+| `images/cmse_comparison.png` | The "OT filter is more accurate" curve comes from a single unseeded run of 30 steps. Re-tested over 100 seeded sequences (with the standard noise variances 10 and 1; the legacy code passed 10 as a standard deviation), OT resampling is not significantly more accurate at eps <= 0.5 and is less accurate at eps = 1 (main README, experiment 4). |
 
 The rebuilt package fixes each point: noise is reparameterised so gradients reach
 every parameter, resampling is a differentiable log-domain Sinkhorn barycentric

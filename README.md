@@ -1,87 +1,183 @@
-# Differentiable Particle Filter with Entropy-Regularized Optimal Transport
+# Particle-Filter-Optimal-Transport
 
-This repository implements a state-of-the-art algorithm to solve a core problem in probabilistic tracking: making particle filters differentiable.
+Can a particle filter return gradients good enough to learn a model's parameters? A PyTorch
+implementation of optimal-transport resampling (Corenflos et al., ICML 2021), measured against
+the exact Kalman score over 100 seeds.
 
-This project was completed for the Cassiopée research program at Télécom SudParis, based on the paper **"Differentiable Particle Filtering via Entropy-Regularized Optimal Transport"** (Corenflos et al.).
+[![ci](https://github.com/Pchambet/Particle-Filter-Optimal-Transport/actions/workflows/ci.yml/badge.svg)](https://github.com/Pchambet/Particle-Filter-Optimal-Transport/actions/workflows/ci.yml)
+![Python 3.12](https://img.shields.io/badge/python-3.12-0d9488)
+[![License: MIT](https://img.shields.io/badge/license-MIT-64748b)](LICENSE)
+[![Report](https://img.shields.io/badge/report-interactive-d97706)](https://pchambet.github.io/Particle-Filter-Optimal-Transport/)
 
----
+![Gradient error vs particle count, and learning trajectories on the exact likelihood](docs/figures/hero.png)
 
-## The Core Idea (Explained Simply)
+## TL;DR
 
-#### 1. The Scenario
-Imagine trying to track a small, fast robot (the "true state") as it moves through a smoky room, using only a blurry, lagging camera (the "observation").
+- **The textbook gradient is wrong by more than its own size.** At N = 100 particles, over 100
+  seeds, the score from a filter with multinomial resampling has a bias of norm 24.8, while the
+  exact score has norm 16.8. Soft resampling (alpha = 0.5) does not fix it (bias 20.3, RMSE 43.3).
+- **OT resampling cuts the bias 10x and the RMSE 2.6x**: bias 2.4, RMSE 14.3 vs 37.9 for
+  multinomial (eps = 0.5). eps trades bias for variance: bias 2.0 / 2.4 / 3.1 and spread
+  15.5 / 14.2 / 13.8 for eps = 0.25 / 0.5 / 1.
+- **Better gradients did not buy better parameters here.** Adam from a distant start lands within
+  0.053 of the exact MLE in every run of every scheme (mean distance: multinomial 0.025, soft
+  0.023, OT 0.040).
+- **It is not free:** at N = 100 an OT filter run took 1.2 s against 0.009 s for multinomial,
+  about 130x (CPU, indicative).
+- **The 2024 claim does not survive a re-test.** On the bimodal nonlinear model, OT resampling
+  (eps <= 0.5) tracks no better than multinomial (RMSE change -0.12 +/- 0.24, 100 sequences), and
+  eps = 1 is worse (+0.35 +/- 0.34).
 
-#### 2. What is a Particle Filter?
-A Particle Filter (PF) works by making thousands of 'guesses' (particles) about the robot's real-time position. Based on the blurry camera image, it gives a "score" to each guess. Good guesses get high scores; bad guesses get low scores.
+## Why it matters
 
-#### 3. The "Non-Differentiable" Problem
-A *standard* particle filter then performs a 'survival of the fittest' step called **resampling**. It abruptly **kills** all the low-score guesses and **duplicates** the high-score ones.
+State-space models are how operations data is usually modelled: a hidden state (demand, wear,
+position, congestion) observed through noise. Particle filters estimate their likelihood when no
+closed form exists, which is the normal case. Fitting the parameters by gradient descent, or
+training a neural component inside the filter, needs the gradient of that estimate. The
+resampling step draws discrete ancestor indices, so automatic differentiation silently drops part
+of the gradient and returns a biased answer without any warning. This repository measures how
+large that bias is, and what an optimal-transport resampling step buys, on a model where the exact
+answer is known.
 
-* **The Problem:** This "kill/duplicate" step is a hard, discrete on/off switch. You cannot use calculus (i.e., gradient descent) on a hard switch. This means you can't "teach" the filter to get better or automatically tune its own parameters (like a neural network). It is **non-differentiable**.
+## Approach
 
-#### 4. The Solution (This Project)
-Our filter uses **Optimal Transport (OT)**. Instead of 'killing' and 'duplicating' guesses, it **smoothly moves** them.
+1. **Ground truth.** A 2-D linear-Gaussian model, `x_t = diag(theta) x_{t-1} + N(0, I)`,
+   `y_t = x_t + N(0, 0.5^2 I)`, `T = 100`, true `theta = (0.8, 0.5)`. The Kalman filter, written
+   in PyTorch, gives the exact log-likelihood; autograd through it gives the exact score.
+2. **Three resampling schemes** inside the same bootstrap filter, resampling at every step:
+   - *multinomial*: the textbook draw; autograd treats the ancestor indices as constants;
+   - *soft* (Karkus et al., 2018): ancestors drawn from `0.5 w + 0.5 / N`, importance weights
+     keep a gradient path to `w`;
+   - *optimal transport*: the entropy-regularised OT plan `P` between the weighted particle cloud
+     and the uniform one, by log-domain Sinkhorn; particle `j` moves to `N sum_i P_ij x_i`.
+     Gradients through the plan come from the implicit function theorem at the Sinkhorn fixed
+     point (one linear solve per step), checked against finite differences.
+3. **Benchmark.** For N in {25, 50, 100} and 100 seeds each: bias, spread and RMSE of the
+   log-likelihood and score estimates at the true parameter.
+4. **Decision test.** Adam on each gradient estimate from `theta = (0.1, 0.95)`, compared with
+   the exact maximum-likelihood estimate.
+5. **Stress test.** The bimodal nonlinear model used by the original 2024 student project, where
+   averaging particles is risky.
 
-* **The Solution:** It calculates the most efficient way to "shift" all the bad guesses over to the locations of the good guesses. Because this "shifting" is a smooth, continuous process, you *can* use calculus on it.
+## Results
 
-This makes the entire filter **differentiable**, allowing it to be optimized and integrated into modern deep learning pipelines.
+**Gradient accuracy.** Each dot is one seed's score estimate at the true parameter; the star is
+the exact Kalman score. The multinomial and soft clouds are centred far to the left of it; the OT
+cloud is centred near it.
 
----
+![Score estimates per seed around the exact score](docs/figures/score_scatter.png)
 
-## Key Results
+**The role of eps.** Smaller eps means a sharper transport plan: less bias, more variance. Every OT
+variant has a lower bias and a lower spread than both baselines at N = 100.
 
-We compared our Optimal Transport Particle Filter (OT-PF) against a classical particle filter (with standard resampling) on a state-tracking task.
+![Bias and spread of the score per method](docs/figures/eps_tradeoff.png)
 
-#### 1. Trajectory Estimation
-The OT-PF (black line) successfully tracks the true observations (blue line) and demonstrates a more stable and accurate estimation than the classical filter (red line).
+| N = 100, 100 seeds | log-lik bias | log-lik sd | score bias | score sd | score RMSE | s / run |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Multinomial | -5.96 | 3.31 | 24.80 | 28.87 | 37.95 | 0.009 |
+| Soft (alpha = 0.5) | -9.62 | 5.07 | 20.31 | 38.38 | 43.26 | 0.012 |
+| OT, eps = 0.25 | -5.53 | 3.73 | 1.99 | 15.53 | 15.58 | 3.34 |
+| OT, eps = 0.5 | -5.64 | 3.77 | 2.39 | 14.21 | 14.34 | 1.20 |
+| OT, eps = 1 | -5.79 | 3.82 | 3.13 | 13.78 | 14.06 | 0.64 |
 
-![Trajectory Estimation Comparison](images/trajectory_estimation.png)
+The log-likelihood estimates themselves are almost unaffected by the resampling scheme (soft
+resampling excepted): the difference is in the gradient. Full table for N = 25, 50, 100 in
+[`results/summary_gradients.csv`](results/summary_gradients.csv).
 
-#### 2. Cumulative Mean Squared Error (CMSE)
-This is the key result. The CMSE (a measure of total error) of our OT-PF (black line) is **consistently lower** than that of the classical filter (red line). This proves our method is not just differentiable, but also more accurate.
+**Learning** (right panel of the hero figure). Adam, 150 steps, learning rate 0.02, N = 50,
+5 runs per scheme. All three schemes reach the neighbourhood of the MLE; the exact-score path is
+the reference ([`results/summary_learning.csv`](results/summary_learning.csv)).
 
-![CMSE Comparison](images/cmse_comparison.png)
+**Nonlinear model.** The growth model of the original project (`y = x^2 / 20 + noise`, bimodal
+posterior), 100 sequences of length 50, N = 100, paired against multinomial resampling. A
+reference filter with 5,000 particles shows the room for improvement (-0.44).
 
----
+![Paired change in tracking RMSE against multinomial resampling](docs/figures/kitagawa.png)
 
-## Technical Features & Implementation
-
-* **Optimal Transport PF:** `optimal_transport.py` implements the full particle filter using OT resampling.
-* **Auto-Differentiation:** `auto_differentiation.py` provides a proof-of-concept for estimating model parameters ($Q$ and $R$) via gradient descent.
-* **Mathematical Proofs:** As the lead on the theoretical side of this project, **I authored the complete mathematical derivations in `Proof_report.pdf`**. This document provides the full derivation of the Optimal Transport dual problem, the saddle-point proof, and the derivation for entropic regularization.
-
-* **[You can read the full `Proof_report.pdf` that I produced here](Documents/Proof_report.pdf)**.
-
----
-
-## Installation
-
-This project requires Python 3.x and the following libraries:
-
----
-
-## Project Structure
+## Reproduce
 
 ```bash
-pip install numpy matplotlib
-pip install pot
+make setup     # uv sync --locked (Python 3.12, PyTorch CPU)
+make data      # simulate the observation sequences (seeded) into data/simulated/
+make run       # the four experiments -> results/*.csv, then docs/figures/*.png
+make report    # site/index.html, the interactive report
+make test      # 22 tests, ~40 s
+```
 
-📦 Particle-Filter-Optimal-Transport
-│
-├── 📂 Code/                             # Main Python scripts
-│   ├── auto_differentiation.py          # Parameter estimation using autodifferentiation
-│   └── optimal_transport.py             # Main implementation of the PF-OT filter
-│
-├── 📂 Documents/                        # Research and analysis reports
-│   ├── Synthesis_report.pdf             # Summary report of the project
-│   ├── Proof_report.pdf                 # Full mathematical derivations
-│   ├── Poster.pdf                       # Project presentation poster
-│   └── Annexe_Autodifferentiation.pdf   # Explanation of Q and R parameter estimation
-│
-├── 📂 Notebooks/                        # Jupyter notebooks for testing and visualization
-│
-├── 📂 Outputs/                          # Output images and generated results
-│
-├── 📂 Images/                           # Illustrations
-│
-└── README.md    
+`make run` took about 50 minutes on a 10-core laptop shared with other jobs (3 torch threads); the
+OT filters dominate. Disk: under 2 MB of results. No download: every dataset is simulated from a
+fixed seed, which is what makes an exact ground truth possible.
+
+## Repository layout
+
+```
+src/otpf/
+  sinkhorn.py     log-domain Sinkhorn, implicit-function gradients
+  resampling.py   multinomial, soft and optimal-transport resampling
+  filter.py       bootstrap particle filter (batched over seeds)
+  kalman.py       exact log-likelihood and score (ground truth)
+  models.py       linear-Gaussian and Kitagawa models, reparameterised noise
+  learn.py        exact MLE (L-BFGS) and Adam on any gradient source
+  experiments.py  the four experiments
+  figures.py, report.py, summary.py, cli.py
+tests/            Sinkhorn, Kalman and filter tests (finite differences, closed forms)
+results/          experiment outputs (CSV) used by the figures and this README
+docs/figures/     static figures
+notes/            optimal transport notes, NAIST workshop (May 2025)
+docs/cassiopee-2024/  the original student project reports (French)
+legacy/           the original 2024 code, kept for the record (see legacy/README.md)
+```
+
+## Methodology notes and limitations
+
+- **One small, friendly model.** Two parameters, d = 2, where the Kalman filter is exact. The point
+  is a ground truth, not scale. The finding that biased gradients still learn well may not carry
+  over to models where the bias points away from the optimum; this benchmark does not show such a
+  case.
+- **The score bias is measured at the true parameter only**, not along the optimisation path.
+- **OT is biased for any fixed eps > 0.** The barycentric map shrinks the particle cloud. eps is
+  defined on particles standardised per dimension, so it is comparable across steps, but there is
+  no automatic choice here.
+- **Cost.** O(N^2) memory and time per step plus a Sinkhorn loop whose length grows as eps
+  shrinks. Timings were taken on a laptop shared with other jobs; read them as orders of magnitude.
+- **Gradients through Sinkhorn** use the implicit function theorem at the fixed point, exact up to
+  the solver tolerance (L1 marginal error 1e-6), and verified against finite differences in the
+  tests. Truncated unrolling was tried during development and set aside (5 replayed iterations
+  gave a 40% gradient error at eps = 0.3).
+- **Few learning repeats** (5 per scheme) and a fixed learning rate: distances to the MLE are
+  indicative, not a ranking.
+- On the nonlinear model, the eps = 1 degradation is consistent with the plan averaging particles
+  across the two modes of the posterior; that mechanism was not tested separately.
+
+## Background
+
+This started as a Télécom SudParis research project (Cassiopée, 2023-2024, supervised by
+Yohan Petetin) with Mael Spangenberger and Léo Ritchie; the team's reports, including the
+derivations of the OT dual and of the entropic regularisation, are in
+[`docs/cassiopee-2024/`](docs/cassiopee-2024/) (in French). A later review found that the
+original code did not demonstrate what it claimed: its "OT" resampling reduced to multinomial
+resampling and nothing was differentiated through the transport plan
+([details](legacy/README.md)). The package in `src/otpf/` is a rebuild from scratch, with the
+claims re-tested.
+
+[`notes/`](notes/) holds my optimal transport notes from a workshop at NAIST (Nara Institute of
+Science and Technology), May 2025: an 18-page introduction from Monge to Brenier, and a review of
+*Generative Modeling with Optimal Transport Maps* (ICLR 2022).
+
+## References
+
+- A. Corenflos, J. Thornton, G. Deligiannidis, A. Doucet. *Differentiable Particle Filtering via
+  Entropy-Regularized Optimal Transport.* ICML 2021. [arXiv:2102.07850](https://arxiv.org/abs/2102.07850)
+- P. Karkus, D. Hsu, W. S. Lee. *Particle Filter Networks with Application to Visual
+  Localization.* CoRL 2018. [arXiv:1805.08975](https://arxiv.org/abs/1805.08975)
+- M. Cuturi. *Sinkhorn Distances: Lightspeed Computation of Optimal Transport.* NeurIPS 2013.
+- G. Luise, A. Rudi, M. Pontil, C. Ciliberto. *Differential Properties of Sinkhorn Approximation
+  for Learning with Wasserstein Distance.* NeurIPS 2018.
+- G. Peyré, M. Cuturi. *Computational Optimal Transport.* Foundations and Trends in Machine
+  Learning, 2019.
+- N. J. Gordon, D. J. Salmond, A. F. M. Smith. *Novel approach to nonlinear/non-Gaussian Bayesian
+  state estimation.* IEE Proceedings F, 1993 (bootstrap filter and the growth model of experiment 4).
+
+---
+
+Built by [Pierre Chambet](https://github.com/Pchambet) — decision science for operations under uncertainty.
