@@ -5,15 +5,16 @@ of Sinkhorn (`u = a / Kv`) underflows; every update is written with `logsumexp`
 on the dual potentials instead.
 
 Gradients. Unrolling hundreds of iterations at every filter step would keep an
-N x N tensor per iteration on the autograd tape; truncating the unroll to a
-few iterations was tried during development and set aside as inaccurate. We
-instead run the iterations to convergence without recording, and differentiate
-the fixed point with the implicit function theorem: one (N + M - 1) linear
-solve per plan, memory O(N M), exact up to the solver tolerance.
+N x N tensor per iteration on the autograd tape. We instead run the
+iterations to convergence without recording, and differentiate the fixed point
+with the implicit function theorem: one (N + M - 1) linear solve per plan,
+memory O(N M), exact up to the solver tolerance (a RuntimeWarning is raised if
+`max_iter` is reached first).
 """
 
 from __future__ import annotations
 
+import warnings
 from typing import Any, Literal
 
 import torch
@@ -52,13 +53,24 @@ def _iterate(
         new = max(0.5 * level, eps)
         fs, gs, level = fs * level / new, gs * level / new, new
     target = log_a.exp()
+    error = float("inf")
     for it in range(max_iter):
         fs = -torch.logsumexp(log_k + (log_b + gs)[..., None, :], dim=-1)
         gs = -torch.logsumexp(log_k + (log_a + fs)[..., :, None], dim=-2)
-        if it % 5 == 4:
+        if it % 5 == 4 or it == max_iter - 1:
             log_p = log_k + (log_a + fs)[..., :, None] + (log_b + gs)[..., None, :]
-            if (torch.logsumexp(log_p, dim=-1).exp() - target).abs().sum(-1).max() < tol:
+            error = float(
+                (torch.logsumexp(log_p, dim=-1).exp() - target).abs().sum(-1).max().detach()
+            )
+            if error < tol:
                 break
+    else:
+        warnings.warn(
+            f"Sinkhorn reached max_iter={max_iter} with marginal L1 error {error:.1e} "
+            f"above tol={tol:.0e}; the plan and its implicit gradient are approximate.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
     return eps * fs, eps * gs
 
 

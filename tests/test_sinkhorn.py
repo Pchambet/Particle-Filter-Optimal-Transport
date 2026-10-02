@@ -23,6 +23,14 @@ def test_plan_has_requested_marginals() -> None:
     torch.testing.assert_close(plan.sum(-2), log_b.exp(), atol=1e-12, rtol=0)
 
 
+@pytest.mark.parametrize("gradient", ["implicit", "unroll"])
+def test_warns_when_max_iter_is_reached_before_tol(gradient: str) -> None:
+    x, log_a, log_b = _problem()
+    cost = torch.cdist(x, x) ** 2
+    with pytest.warns(RuntimeWarning, match="max_iter"):
+        sinkhorn_plan(log_a, log_b, cost, eps=0.01, max_iter=3, tol=1e-12, gradient=gradient)
+
+
 def test_two_point_problem_matches_closed_form() -> None:
     # Two atoms at 0 and 1, uniform marginals: by symmetry P = [[p, q], [q, p]] / 2
     # with p + q = 1 and p / q = exp(1 / eps) (the off-diagonal cost is 1).
