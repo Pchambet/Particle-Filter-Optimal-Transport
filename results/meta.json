@@ -1,0 +1,50 @@
+{
+  "config": {
+    "theta_true": [
+      0.8,
+      0.5
+    ],
+    "theta_init": [
+      0.1,
+      0.95
+    ],
+    "sigma_x": 1.0,
+    "sigma_y": 0.5,
+    "T": 100,
+    "data_seed": 2026,
+    "n_seeds": 100,
+    "seed_batch": 50,
+    "particle_counts": [
+      25,
+      50,
+      100
+    ],
+    "eps_grid": [
+      0.25,
+      0.5,
+      1.0
+    ],
+    "soft_alpha": 0.5,
+    "grid_size": 81,
+    "learn_steps": 150,
+    "learn_lr": 0.02,
+    "learn_runs": 5,
+    "learn_particles": 50,
+    "learn_eps": 0.5,
+    "kitagawa_T": 50,
+    "kitagawa_sequences": 100,
+    "kitagawa_particles": 100,
+    "kitagawa_reference_particles": 5000
+  },
+  "kalman_at_truth": {
+    "log_likelihood": -307.9117569350598,
+    "score": [
+      -13.584390621238267,
+      -9.96084020476217
+    ]
+  },
+  "kalman_mle": [
+    0.7098331216645976,
+    0.3727215980730894
+  ]
+}
